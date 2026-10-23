@@ -51,9 +51,9 @@ Open from the left-edge chevron (hover or click):
 | Section | What you get |
 | --- | --- |
 | **Display** | Per-monitor brightness (DDC/CI and WMI) |
-| **Text** | System text scale 100–225% (A− / A+) |
+| **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ and slider (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
 | **Sound** | Volume slider and mute |
-| **Actions** | 3×3 grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute, Text |
+| **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute |
 
 Restart and Shut down require a second confirm within two seconds.
 
@@ -91,6 +91,14 @@ Installs to `C:\Program Files\QuickView`, adds Desktop and Start Menu shortcuts,
 ```
 
 Output: `bin\QuickView.exe`
+
+### Tests
+
+```powershell
+.\scripts\test.ps1
+```
+
+Runs dedicated Accessibility Text size unit tests (snap, slider mapping, A± / tile wrap). Manual UI matrix: [docs/TEST-TextScale.md](docs/TEST-TextScale.md).
 
 ---
 
@@ -151,7 +159,9 @@ C:\Program Files\QuickView\uninstall.bat
 ```text
 QuickView/
 ├── src/              # C# sources (WinForms)
-├── scripts/          # build.ps1, setup.bat, setup-standalone.bat
+├── tests/            # Unit tests (TextScale, etc.)
+├── scripts/          # build.ps1, test.ps1, setup*.bat
+├── docs/             # Manual test matrices
 ├── assets/           # Screenshots for this README
 ├── bin/              # Build output (generated)
 ├── LICENSE           # MIT

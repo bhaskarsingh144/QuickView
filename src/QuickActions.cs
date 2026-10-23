@@ -9,6 +9,8 @@ internal enum QuickHit
     QuickIcon,
     TextMinus,
     TextPlus,
+    TextScale,
+    TextApply,
     Mute,
     Volume,
     Brightness,
@@ -19,8 +21,7 @@ internal enum QuickHit
     TileShutdown,
     TileDisplaySettings,
     TileSoundSettings,
-    TileMute,
-    TileText
+    TileMute
 }
 
 internal enum QuickArm
@@ -35,6 +36,9 @@ internal sealed class QuickActions
     public Rectangle IconRect;
     public Rectangle TextMinusRect;
     public Rectangle TextPlusRect;
+    public Rectangle TextTrack;
+    public Rectangle TextThumb;
+    public Rectangle TextApplyRect;
     public Rectangle MuteRect;
     public Rectangle VolumeTrack;
     public Rectangle VolumeThumb;
@@ -49,22 +53,27 @@ internal sealed class QuickActions
     public Rectangle TileDisplaySettings;
     public Rectangle TileSoundSettings;
     public Rectangle TileMute;
-    public Rectangle TileText;
 
     public float Volume01;
     public bool Muted;
     public int TextPercent = 100;
+    public int TextAppliedPercent = 100;
+    public bool TextDirty;
     public string StatusLine = "";
     public QuickArm Armed = QuickArm.None;
     public DateTime ArmedUntil = DateTime.MinValue;
     public int DragBrightIndex = -1;
     public bool DragVolume;
+    public bool DragText;
 
     public void ClearHits()
     {
         IconRect = Rectangle.Empty;
         TextMinusRect = Rectangle.Empty;
         TextPlusRect = Rectangle.Empty;
+        TextTrack = Rectangle.Empty;
+        TextThumb = Rectangle.Empty;
+        TextApplyRect = Rectangle.Empty;
         MuteRect = Rectangle.Empty;
         VolumeTrack = Rectangle.Empty;
         VolumeThumb = Rectangle.Empty;
@@ -79,7 +88,6 @@ internal sealed class QuickActions
         TileDisplaySettings = Rectangle.Empty;
         TileSoundSettings = Rectangle.Empty;
         TileMute = Rectangle.Empty;
-        TileText = Rectangle.Empty;
     }
 
     public void ClearArmIfExpired()
@@ -100,6 +108,8 @@ internal sealed class QuickActions
         if (IconRect.Contains(p)) return QuickHit.QuickIcon;
         if (TextMinusRect.Contains(p)) return QuickHit.TextMinus;
         if (TextPlusRect.Contains(p)) return QuickHit.TextPlus;
+        if (TextTrack.Contains(p) || TextThumb.Contains(p)) return QuickHit.TextScale;
+        if (TextDirty && TextApplyRect.Contains(p)) return QuickHit.TextApply;
         if (MuteRect.Contains(p)) return QuickHit.Mute;
         if (VolumeTrack.Contains(p) || VolumeThumb.Contains(p)) return QuickHit.Volume;
         for (int i = 0; i < BrightTracks.Count; i++)
@@ -115,7 +125,6 @@ internal sealed class QuickActions
         if (TileDisplaySettings.Contains(p)) return QuickHit.TileDisplaySettings;
         if (TileSoundSettings.Contains(p)) return QuickHit.TileSoundSettings;
         if (TileMute.Contains(p)) return QuickHit.TileMute;
-        if (TileText.Contains(p)) return QuickHit.TileText;
         return QuickHit.None;
     }
 
