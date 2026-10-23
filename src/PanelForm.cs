@@ -83,6 +83,19 @@ internal sealed class PanelForm : Form
     private Rectangle _wifiHit;
     private Rectangle _batteryHit;
     private bool _batteryHot;
+    private Rectangle _brightTrack;
+    private Rectangle _brightThumb;
+    private string _brightId = "";
+    private bool _brightDragging;
+    private bool _brightHover;
+    private readonly System.Windows.Forms.Timer _fade;
+    private double _fadeFrom = OpacityFade.PanelNormal;
+    private double _fadeTo = OpacityFade.PanelNormal;
+    private DateTime _fadeStartedUtc = DateTime.MinValue;
+    private int _fadeDurationMs;
+    private bool _fadeRunning;
+    private DateTime _dimIdleUntil = DateTime.MinValue;
+    private bool _brightnessPreview;
 
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
@@ -114,7 +127,7 @@ internal sealed class PanelForm : Form
         ShowInTaskbar = false;
         TopMost = false;
         BackColor = Fill;
-        Opacity = 0.94;
+        Opacity = OpacityFade.PanelNormal;
         DoubleBuffered = true;
         Text = "QuickView";
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
@@ -131,6 +144,9 @@ internal sealed class PanelForm : Form
         _mouseTimer.Interval = 16;
         _mouseTimer.Tick += MouseTick;
         _mouseTimer.Start();
+        _fade = new System.Windows.Forms.Timer();
+        _fade.Interval = 16;
+        _fade.Tick += FadeTick;
         _wheel = new WheelFilter(this);
         Application.AddMessageFilter(_wheel);
         ApplySize();
@@ -164,6 +180,7 @@ internal sealed class PanelForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _mouseTimer.Stop();
+        _fade.Stop();
         _sampler.Sampled -= OnSampled;
         _sampler.Dispose();
         CloseQuickPopup();
@@ -495,7 +512,12 @@ internal sealed class PanelForm : Form
         if (_shown != show || Left != left || Top != top)
         {
             if (!show && _shown)
+            {
                 CloseQuickPopup();
+                ResetOpacityImmediate();
+            }
+            if (show && !_shown)
+                _brightness.Refresh();
             _shown = show;
             Left = left;
             Top = top;
@@ -581,7 +603,50 @@ internal sealed class PanelForm : Form
         int y = Px(14);
         int inner = ContentInner();
         y = Header(g, x, y, inner);
+        y = BrightnessStrip(g, x, y, inner);
         return Chips(g, x, y, inner);
+    }
+
+    private int BrightnessStrip(Graphics g, int x, int y, int inner)
+    {
+        _brightTrack = Rectangle.Empty;
+        _brightThumb = Rectangle.Empty;
+        BrightnessMonitor mon = FirstControllableBrightness();
+        if (mon == null)
+        {
+            _brightId = "";
+            return y;
+        }
+        _brightId = mon.Id ?? "";
+        int trackH = Px(5);
+        int row = Px(16);
+        _brightTrack = new Rectangle(x, y + (row - trackH) / 2, inner, trackH);
+        if (g != null)
+        {
+            float v = mon.Percent / 100f;
+            if (v < 0f) v = 0f;
+            if (v > 1f) v = 1f;
+            Rectangle thumb;
+            QuickActions.DrawSlider(g, _brightTrack, v, Track, UiTheme.Accent, out thumb);
+            _brightThumb = thumb;
+        }
+        return y + row + Px(6);
+    }
+
+    private BrightnessMonitor FirstControllableBrightness()
+    {
+        for (int i = 0; i < _brightness.Items.Count; i++)
+        {
+            if (_brightness.Items[i].Controllable)
+                return _brightness.Items[i];
+        }
+        return null;
+    }
+
+    internal bool BrightnessStripContains(Point clientPt)
+    {
+        return _brightTrack.Width > 0
+            && (_brightTrack.Contains(clientPt) || _brightThumb.Contains(clientPt));
     }
 
     private int Body(Graphics g, int y)
@@ -1552,11 +1617,24 @@ internal sealed class PanelForm : Form
         return path;
     }
 
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        if (!ContainsFocus)
+            Focus();
+    }
+
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
         if (e.Button != MouseButtons.Left)
             return;
+        if (_brightDragging)
+        {
+            _brightDragging = false;
+            Capture = false;
+            return;
+        }
         if (_dragging)
         {
             _dragging = false;
@@ -1613,6 +1691,13 @@ internal sealed class PanelForm : Form
         base.OnMouseDown(e);
         if (e.Button != MouseButtons.Left)
             return;
+        if (BrightnessStripContains(e.Location))
+        {
+            _brightDragging = true;
+            Capture = true;
+            ApplyPanelBrightnessAt(e.X);
+            return;
+        }
         if (_gutter <= 0)
             return;
         if (_thumbRect.Contains(e.Location))
@@ -1637,6 +1722,11 @@ internal sealed class PanelForm : Form
         base.OnMouseMove(e);
         Point p = e.Location;
         Point body = p.Y > _headH ? new Point(p.X, p.Y + _scroll) : p;
+        if (_brightDragging)
+        {
+            ApplyPanelBrightnessAt(e.X);
+            return;
+        }
         if (_dragging)
         {
             int travel = _barRect.Height - _thumbRect.Height;
@@ -1672,17 +1762,20 @@ internal sealed class PanelForm : Form
         bool prevWifi = _wifiHot;
         bool prevChevron = _chevronHot;
         bool prevBatt = _batteryHot;
+        bool prevBright = _brightHover;
         _wifiHot = _wifiHit.Contains(p);
         _chevronHot = _chevronHit.Contains(p);
         _batteryHot = _batteryHit.Contains(p);
+        _brightHover = BrightnessStripContains(p);
 
-        bool hand = _wifiHot || _chevronHot || _batteryHot || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;
+        bool hand = _wifiHot || _chevronHot || _batteryHot || _brightHover
+            || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;
         Cursor = hand ? Cursors.Hand : Cursors.Default;
         UpdateTooltip(p);
 
         if (prev != _hover || prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
             || prevDisk != _chipHoverDisk || prevTrim != _trimHover || prevWifi != _wifiHot || prevChevron != _chevronHot
-            || prevBatt != _batteryHot)
+            || prevBatt != _batteryHot || prevBright != _brightHover)
             Invalidate();
     }
 
@@ -1692,6 +1785,7 @@ internal sealed class PanelForm : Form
         if (_chevronHit.Contains(p)) tip = QuickPopupOpen() ? "Close settings" : "Quick settings";
         else if (_wifiHit.Contains(p)) tip = "Network settings";
         else if (_batteryHit.Contains(p)) tip = "Power options";
+        else if (_brightHover) tip = "Brightness";
         if (tip == _lastTip)
             return;
         _lastTip = tip;
@@ -1718,6 +1812,94 @@ internal sealed class PanelForm : Form
         if (step == 0)
             step = wheelDelta > 0 ? line : -line;
         ScrollBy(-step);
+    }
+
+    private void ApplyPanelBrightnessAt(int x)
+    {
+        if (_brightTrack.Width < 1 || string.IsNullOrEmpty(_brightId))
+            return;
+        float v = (x - _brightTrack.X) / (float)_brightTrack.Width;
+        if (v < 0f) v = 0f;
+        if (v > 1f) v = 1f;
+        int pct = (int)Math.Round(v * 100f);
+        if (_brightness.TrySet(_brightId, pct))
+            Invalidate();
+    }
+
+    internal void NudgePanelBrightness(int wheelDelta)
+    {
+        if (string.IsNullOrEmpty(_brightId))
+            return;
+        int current = 0;
+        for (int i = 0; i < _brightness.Items.Count; i++)
+        {
+            if (string.Equals(_brightness.Items[i].Id, _brightId, StringComparison.Ordinal))
+            {
+                current = _brightness.Items[i].Percent;
+                break;
+            }
+        }
+        int next = SliderWheel.AdjustBrightness(current, wheelDelta);
+        if (_brightness.TrySet(_brightId, next))
+        {
+            BeginBrightnessPreview();
+            Invalidate();
+        }
+    }
+
+    private void BeginBrightnessPreview()
+    {
+        _brightnessPreview = true;
+        _dimIdleUntil = OpacityFade.IdleDeadline(DateTime.UtcNow);
+        if (Math.Abs(Opacity - OpacityFade.Preview) < 0.02 && !_fadeRunning)
+            return;
+        StartFade(Opacity, OpacityFade.Preview, OpacityFade.FadeOutMs);
+    }
+
+    private void StartFade(double from, double to, int durationMs)
+    {
+        _fadeFrom = from;
+        _fadeTo = to;
+        _fadeDurationMs = durationMs < 1 ? 1 : durationMs;
+        _fadeStartedUtc = DateTime.UtcNow;
+        _fadeRunning = true;
+        if (!_fade.Enabled)
+            _fade.Start();
+    }
+
+    private void FadeTick(object sender, EventArgs e)
+    {
+        DateTime now = DateTime.UtcNow;
+        if (_fadeRunning)
+        {
+            int elapsed = (int)(now - _fadeStartedUtc).TotalMilliseconds;
+            Opacity = OpacityFade.OpacityAt(_fadeFrom, _fadeTo, elapsed, _fadeDurationMs);
+            if (OpacityFade.FadeComplete(elapsed, _fadeDurationMs))
+            {
+                Opacity = _fadeTo;
+                _fadeRunning = false;
+            }
+            return;
+        }
+
+        if (_brightnessPreview && OpacityFade.IdleElapsed(now, _dimIdleUntil))
+        {
+            _brightnessPreview = false;
+            StartFade(Opacity, OpacityFade.PanelNormal, OpacityFade.FadeInMs);
+            return;
+        }
+
+        if (!_brightnessPreview && !_fadeRunning && Math.Abs(Opacity - OpacityFade.PanelNormal) < 0.01)
+            _fade.Stop();
+    }
+
+    private void ResetOpacityImmediate()
+    {
+        _fade.Stop();
+        _fadeRunning = false;
+        _brightnessPreview = false;
+        _dimIdleUntil = DateTime.MinValue;
+        Opacity = OpacityFade.PanelNormal;
     }
 
     private int MaxScroll(int height)
@@ -1934,10 +2116,16 @@ internal sealed class PanelForm : Form
                     return false;
                 if (!_form.Bounds.Contains(Cursor.Position))
                     return false;
-                if (_form.MaxScroll(_form.Height) < 1)
-                    return false;
                 long w = m.WParam.ToInt64();
                 int delta = (short)((w >> 16) & 0xFFFF);
+                Point client = _form.PointToClient(Cursor.Position);
+                if (_form.BrightnessStripContains(client))
+                {
+                    _form.NudgePanelBrightness(delta);
+                    return true;
+                }
+                if (_form.MaxScroll(_form.Height) < 1)
+                    return false;
                 _form.ScrollByWheel(delta);
                 return true;
             }
