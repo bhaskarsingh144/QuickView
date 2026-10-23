@@ -784,8 +784,8 @@ internal sealed class PanelForm : Form
         int rateIcon = Px(10);
         float down = _snap.NetKnown ? _snap.DownMBps : 0f;
         float up = _snap.NetKnown ? _snap.UpMBps : 0f;
-        string dText = down.ToString("0.00");
-        string uText = up.ToString("0.00");
+        string dText = down.ToString("0.00") + " MB/s";
+        string uText = up.ToString("0.00") + " MB/s";
         SizeF dSize = g.MeasureString(dText, _fontLabel);
         SizeF uSize = g.MeasureString(uText, _fontLabel);
         int dW = (int)Math.Ceiling(dSize.Width);
