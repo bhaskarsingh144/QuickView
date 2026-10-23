@@ -131,6 +131,7 @@ internal sealed class QuickSettingsPopup : Form
     {
         _poll.Stop();
         _quick.DragVolume = false;
+        _quick.DragText = false;
         _quick.DragBrightIndex = -1;
         _quick.Armed = QuickArm.None;
         if (Visible)
@@ -159,7 +160,7 @@ internal sealed class QuickSettingsPopup : Form
 
     private void PollTick(object sender, EventArgs e)
     {
-        if (_quick.DragVolume || _quick.DragBrightIndex >= 0)
+        if (_quick.DragVolume || _quick.DragText || _quick.DragBrightIndex >= 0)
             return;
         if ((DateTime.UtcNow - _lastPoll).TotalMilliseconds < 450)
             return;
@@ -181,7 +182,13 @@ internal sealed class QuickSettingsPopup : Form
         }
         else if (force)
             _quick.StatusLine = _audio.Status;
-        _quick.TextPercent = SystemActions.GetTextScalePercent();
+        int applied = SystemActions.GetTextScalePercent();
+        _quick.TextAppliedPercent = applied;
+        if (!_quick.TextDirty || force)
+        {
+            _quick.TextPercent = applied;
+            _quick.TextDirty = false;
+        }
         _quick.ClearArmIfExpired();
     }
 
@@ -197,9 +204,9 @@ internal sealed class QuickSettingsPopup : Form
         int y = pad;
         int n = ControllableMonitorCount();
         if (n < 1) n = 1;
-        // Each control block: title row + control row + gap
+        // Brightness blocks; text (label + slider + Apply); volume; actions
         y += n * (ControlBlockH() + BlockGap());
-        y += ControlBlockH() + BlockGap();
+        y += ControlBlockH() + Px(8) + Px(32) + BlockGap();
         y += ControlBlockH() + BlockGap();
         y += SectionHeadH() + Px(8);
         int gap = Px(8);
@@ -301,8 +308,9 @@ internal sealed class QuickSettingsPopup : Form
             y += side + BlockGap();
         }
 
-        // Text: label row, then A− · slider · A+
-        y = DrawLabelRow(g, x, y, inner, "Text size", _quick.TextPercent + "%");
+        // Text: label, A− · slider · A+, then Apply (Settings > Accessibility > Text size)
+        string textValue = _quick.TextPercent + "%" + (_quick.TextDirty ? " *" : "");
+        y = DrawLabelRow(g, x, y, inner, "Text size", textValue);
         _quick.TextMinusRect = new Rectangle(x, y, side, side);
         _quick.TextPlusRect = new Rectangle(x + inner - side, y, side, side);
         FillRound(g, _quick.TextMinusRect, Px(8), _hover == QuickHit.TextMinus ? UiTheme.Hover : Track);
@@ -313,14 +321,25 @@ internal sealed class QuickSettingsPopup : Form
             g.DrawString("A−", _fontLabel, brush, _quick.TextMinusRect, fmt);
             g.DrawString("A+", _fontLabel, brush, _quick.TextPlusRect, fmt);
         }
-        Rectangle textBar = new Rectangle(_quick.TextMinusRect.Right + gap, y + (side - trackH) / 2,
+        _quick.TextTrack = new Rectangle(_quick.TextMinusRect.Right + gap, y + (side - trackH) / 2,
             Math.Max(Px(48), _quick.TextPlusRect.Left - gap - (_quick.TextMinusRect.Right + gap)), trackH);
-        float tScale = (_quick.TextPercent - 100) / 125f;
-        if (tScale < 0f) tScale = 0f;
-        if (tScale > 1f) tScale = 1f;
-        Rectangle ignoreThumb;
-        QuickActions.DrawSlider(g, textBar, tScale, Track, Accent, out ignoreThumb);
-        y += side + BlockGap();
+        float tScale = TextScale.SliderFromPercent(_quick.TextPercent);
+        Rectangle textThumb;
+        QuickActions.DrawSlider(g, _quick.TextTrack, tScale, Track, Accent, out textThumb);
+        _quick.TextThumb = textThumb;
+        y += side + gap;
+        int applyH = side;
+        _quick.TextApplyRect = new Rectangle(x, y, inner, applyH);
+        bool applyHot = _hover == QuickHit.TextApply && _quick.TextDirty;
+        Color applyBack = !_quick.TextDirty
+            ? Color.FromArgb(255, 40, 44, 50)
+            : (applyHot ? Accent : Color.FromArgb(255, 70, 110, 180));
+        Color applyInk = _quick.TextDirty ? TextMain : TextMuted;
+        FillRound(g, _quick.TextApplyRect, Px(8), applyBack);
+        using (SolidBrush brush = new SolidBrush(applyInk))
+        using (StringFormat fmt = CenterFormat())
+            g.DrawString("Apply", _fontLabel, brush, _quick.TextApplyRect, fmt);
+        y += applyH + BlockGap();
 
         // Volume: label row, then mute · slider
         int volPct = (int)Math.Round(_quick.Volume01 * 100f);
@@ -359,22 +378,21 @@ internal sealed class QuickSettingsPopup : Form
             _quick.Armed == QuickArm.Shutdown ? "Confirm" : "Shut down",
             "Display",
             "Sound",
-            _quick.Muted ? "Unmute" : "Mute",
-            "Text " + _quick.TextPercent + "%"
+            _quick.Muted ? "Unmute" : "Mute"
         };
         QuickHit[] hits = new QuickHit[]
         {
             QuickHit.TileExplorer, QuickHit.TileLock, QuickHit.TileSleep,
             QuickHit.TileRestart, QuickHit.TileShutdown, QuickHit.TileDisplaySettings,
-            QuickHit.TileSoundSettings, QuickHit.TileMute, QuickHit.TileText
+            QuickHit.TileSoundSettings, QuickHit.TileMute
         };
         Action<Graphics, Rectangle, Color>[] glyphs = new Action<Graphics, Rectangle, Color>[]
         {
             QuickActions.GlyphExplorer, QuickActions.GlyphLock, QuickActions.GlyphSleep,
             QuickActions.GlyphRestart, QuickActions.GlyphShutdown, QuickActions.GlyphSettings,
-            QuickActions.GlyphSpeakerOpen, QuickActions.GlyphSpeakerOpen, QuickActions.GlyphTextAa
+            QuickActions.GlyphSpeakerOpen, QuickActions.GlyphSpeakerOpen
         };
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 8; i++)
         {
             int col = i % 3;
             int row = i / 3;
@@ -472,7 +490,6 @@ internal sealed class QuickSettingsPopup : Form
         else if (hit == QuickHit.TileDisplaySettings) _quick.TileDisplaySettings = r;
         else if (hit == QuickHit.TileSoundSettings) _quick.TileSoundSettings = r;
         else if (hit == QuickHit.TileMute) _quick.TileMute = r;
-        else if (hit == QuickHit.TileText) _quick.TileText = r;
     }
 
     private static StringFormat CenterFormat()
@@ -512,6 +529,13 @@ internal sealed class QuickSettingsPopup : Form
         if (e.Button != MouseButtons.Left)
             return;
         Point p = e.Location;
+        if (_quick.TextTrack.Contains(p) || _quick.TextThumb.Contains(p))
+        {
+            _quick.DragText = true;
+            Capture = true;
+            ApplyTextScaleAt(p.X);
+            return;
+        }
         if (_quick.VolumeTrack.Contains(p) || _quick.VolumeThumb.Contains(p))
         {
             _quick.DragVolume = true;
@@ -533,9 +557,10 @@ internal sealed class QuickSettingsPopup : Form
         base.OnMouseUp(e);
         if (e.Button != MouseButtons.Left)
             return;
-        if (_quick.DragVolume || _quick.DragBrightIndex >= 0)
+        if (_quick.DragVolume || _quick.DragText || _quick.DragBrightIndex >= 0)
         {
             _quick.DragVolume = false;
+            _quick.DragText = false;
             _quick.DragBrightIndex = -1;
             Capture = false;
             return;
@@ -546,6 +571,11 @@ internal sealed class QuickSettingsPopup : Form
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        if (_quick.DragText)
+        {
+            ApplyTextScaleAt(e.X);
+            return;
+        }
         if (_quick.DragVolume)
         {
             ApplyVolumeAt(e.X);
@@ -571,6 +601,40 @@ internal sealed class QuickSettingsPopup : Form
             _hover = QuickHit.None;
             Invalidate();
         }
+    }
+
+    private void ApplyTextScaleAt(int x)
+    {
+        if (_quick.TextTrack.Width < 1)
+            return;
+        float t = (x - _quick.TextTrack.X) / (float)_quick.TextTrack.Width;
+        int percent = TextScale.ClampAndSnap(TextScale.PercentFromSlider(t));
+        SetTextPending(percent);
+    }
+
+    private void SetTextPending(int percent)
+    {
+        percent = TextScale.ClampAndSnap(percent);
+        _quick.TextPercent = percent;
+        _quick.TextDirty = percent != _quick.TextAppliedPercent;
+        _quick.StatusLine = "";
+        Invalidate();
+    }
+
+    private void CommitTextScale()
+    {
+        if (!_quick.TextDirty)
+            return;
+        if (SystemActions.SetTextScalePercent(_quick.TextPercent))
+        {
+            _quick.TextPercent = SystemActions.GetTextScalePercent();
+            _quick.TextAppliedPercent = _quick.TextPercent;
+            _quick.TextDirty = false;
+            _quick.StatusLine = "";
+        }
+        else
+            _quick.StatusLine = SystemActions.LastError;
+        Invalidate();
     }
 
     private void ApplyVolumeAt(int x)
@@ -627,24 +691,17 @@ internal sealed class QuickSettingsPopup : Form
         _quick.ClearArmIfExpired();
         if (hit == QuickHit.TextMinus)
         {
-            int n = _quick.TextPercent - 25;
-            if (SystemActions.SetTextScalePercent(n))
-                _quick.TextPercent = SystemActions.GetTextScalePercent();
-            else
-                _quick.StatusLine = SystemActions.LastError;
-            Invalidate();
+            SetTextPending(TextScale.StepDown(_quick.TextPercent));
             return;
         }
-        if (hit == QuickHit.TextPlus || hit == QuickHit.TileText)
+        if (hit == QuickHit.TextPlus)
         {
-            int n = hit == QuickHit.TileText ? _quick.TextPercent + 25 : _quick.TextPercent + 25;
-            if (hit == QuickHit.TileText && n > 225)
-                n = 100;
-            if (SystemActions.SetTextScalePercent(n))
-                _quick.TextPercent = SystemActions.GetTextScalePercent();
-            else
-                _quick.StatusLine = SystemActions.LastError;
-            Invalidate();
+            SetTextPending(TextScale.StepUp(_quick.TextPercent, false));
+            return;
+        }
+        if (hit == QuickHit.TextApply)
+        {
+            CommitTextScale();
             return;
         }
         if (hit == QuickHit.Mute || hit == QuickHit.TileMute)

@@ -46,10 +46,13 @@ QuickView/
 │   ├── Sampler.cs             # Metrics sampling
 │   ├── QuickSettingsPopup.cs  # Quick settings drawer
 │   └── ...
+├── tests/                     # Unit tests
 ├── scripts/
 │   ├── build.ps1              # Compile from source
+│   ├── test.ps1               # Run unit tests
 │   ├── setup.bat              # System-wide install (admin)
 │   └── setup-standalone.bat   # Portable build + run.bat
+├── docs/                      # Manual test matrices
 ├── assets/                    # README screenshots
 ├── bin/                       # Generated output
 ├── LICENSE
@@ -68,12 +71,20 @@ QuickView/
 
 ### Testing
 
+Automated (no NuGet):
+
+```powershell
+.\scripts\test.ps1
+```
+
+This compiles and runs the TextScale unit tests under `tests/` (Accessibility Text size snap, slider mapping, A±, tile wrap).
+
 Before submitting a pull request:
-1. Build the project successfully
-2. Run the application and verify basic functionality
-3. Test on different screen sizes and DPI settings
-4. Verify the quick settings drawer works correctly
-5. Check that system metrics display accurately
+1. Build successfully (`.\scripts\build.ps1`)
+2. Pass `.\scripts\test.ps1`
+3. Run the app and verify basic functionality
+4. For Text size changes, walk through [docs/TEST-TextScale.md](docs/TEST-TextScale.md)
+5. Spot-check metrics and the quick settings drawer on your DPI setup
 
 ### Submitting Changes
 
