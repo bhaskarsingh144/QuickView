@@ -618,19 +618,21 @@ internal sealed class PanelForm : Form
             return y;
         }
         _brightId = mon.Id ?? "";
-        int trackH = Px(5);
-        int row = Px(16);
-        _brightTrack = new Rectangle(x, y + (row - trackH) / 2, inner, trackH);
+        // ~2 cm tall HyperOS-style fill block (no thumb / no label).
+        int blockH = Px(56);
+        int gapBelow = Px(10);
+        _brightTrack = new Rectangle(x, y, inner, blockH);
         if (g != null)
         {
             float v = mon.Percent / 100f;
             if (v < 0f) v = 0f;
             if (v > 1f) v = 1f;
-            Rectangle thumb;
-            QuickActions.DrawSlider(g, _brightTrack, v, Track, UiTheme.Accent, out thumb);
-            _brightThumb = thumb;
+            Color back = _brightHover || _brightDragging
+                ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
+                : Track;
+            QuickActions.DrawFillBlock(g, _brightTrack, v, back, UiTheme.Accent);
         }
-        return y + row + Px(6);
+        return y + blockH + gapBelow;
     }
 
     private BrightnessMonitor FirstControllableBrightness()
@@ -645,8 +647,7 @@ internal sealed class PanelForm : Form
 
     internal bool BrightnessStripContains(Point clientPt)
     {
-        return _brightTrack.Width > 0
-            && (_brightTrack.Contains(clientPt) || _brightThumb.Contains(clientPt));
+        return _brightTrack.Width > 0 && _brightTrack.Contains(clientPt);
     }
 
     private int Body(Graphics g, int y)

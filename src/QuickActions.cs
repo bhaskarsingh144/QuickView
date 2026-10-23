@@ -246,6 +246,34 @@ internal sealed class QuickActions
             g.FillEllipse(brush, thumb);
     }
 
+    /// <summary>
+    /// HyperOS-style brightness block: rounded capsule, left fill by value, no thumb.
+    /// </summary>
+    public static void DrawFillBlock(Graphics g, Rectangle block, float value01, Color trackColor, Color fillColor)
+    {
+        if (value01 < 0f) value01 = 0f;
+        if (value01 > 1f) value01 = 1f;
+        int radius = Math.Max(8, block.Height / 2);
+        if (g == null)
+            return;
+        using (GraphicsPath path = Round(block, radius))
+        using (SolidBrush brush = new SolidBrush(trackColor))
+            g.FillPath(brush, path);
+        int fillW = (int)Math.Round(block.Width * value01);
+        if (fillW <= 0)
+            return;
+        // Keep a pill end so low values still read as a rounded fill.
+        int minFill = Math.Min(block.Width, Math.Max(radius, block.Height));
+        if (fillW < minFill)
+            fillW = minFill;
+        if (fillW > block.Width)
+            fillW = block.Width;
+        Rectangle fill = new Rectangle(block.X, block.Y, fillW, block.Height);
+        using (GraphicsPath path = Round(fill, radius))
+        using (SolidBrush brush = new SolidBrush(fillColor))
+            g.FillPath(brush, path);
+    }
+
     private static GraphicsPath Round(Rectangle r, int radius)
     {
         GraphicsPath path = new GraphicsPath();
