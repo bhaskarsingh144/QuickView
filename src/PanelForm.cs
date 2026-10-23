@@ -60,7 +60,6 @@ internal sealed class PanelForm : Form
     private readonly QuickActions _quick = new QuickActions();
     private readonly AudioControl _audio = new AudioControl();
     private readonly BrightnessControl _brightness = new BrightnessControl();
-    private readonly ToolTip _tip = new ToolTip();
     private QuickSettingsPopup _quickPopup;
     private DateTime _quickHoverSince = DateTime.MinValue;
     private DateTime _quickLeaveSince = DateTime.MinValue;
@@ -73,7 +72,6 @@ internal sealed class PanelForm : Form
     private bool _chipHoverGpu;
     private bool _chipHoverDisk;
     private bool _trimHover;
-    private string _lastTip = "";
 
     private Rectangle _cpuChip;
     private Rectangle _memChip;
@@ -140,10 +138,6 @@ internal sealed class PanelForm : Form
         AutoScaleMode = AutoScaleMode.None;
         RemeasureDisplay();
         RebuildFonts();
-        _tip.ShowAlways = false;
-        _tip.AutoPopDelay = 2500;
-        _tip.InitialDelay = 400;
-        _tip.ReshowDelay = 200;
         _sampler = new Sampler();
         _sampler.Sampled += OnSampled;
         _mouseTimer = new System.Windows.Forms.Timer();
@@ -197,7 +191,6 @@ internal sealed class PanelForm : Form
         }
         _audio.Dispose();
         _brightness.Dispose();
-        _tip.Dispose();
         _fontLabel.Dispose();
         _fontValue.Dispose();
         Application.RemoveMessageFilter(_wheel);
@@ -785,36 +778,43 @@ internal sealed class PanelForm : Form
             chevGlyph);
         DrawHeaderChevron(g, chevGlyphRect, open, open || _chevronHot ? TextMain : TextMuted);
 
+        // Network: Wi-Fi icon + down/up rates only (no SSID) — content-sized, not a full-width block.
+        // Match rate stack height so the fan glyph reads at a glance.
+        int wifi = Math.Min(Px(28), row - Px(4));
+        int rateIcon = Px(10);
+        float down = _snap.NetKnown ? _snap.DownMBps : 0f;
+        float up = _snap.NetKnown ? _snap.UpMBps : 0f;
+        string dText = down.ToString("0.00");
+        string uText = up.ToString("0.00");
+        SizeF dSize = g.MeasureString(dText, _fontLabel);
+        SizeF uSize = g.MeasureString(uText, _fontLabel);
+        int dW = (int)Math.Ceiling(dSize.Width);
+        int uW = (int)Math.Ceiling(uSize.Width);
+        int rateColW = rateIcon + Px(3) + Math.Max(dW, uW);
+        int lineH = Math.Max(_textH, rateIcon);
+        int ratesH = lineH * 2 + Px(2);
+        int netW = wifi + Px(8) + rateColW;
+        int wifiLeft = _chevronHit.Right + Px(6);
+        _wifiHit = new Rectangle(wifiLeft - Px(2), y, netW + Px(4), row);
+        if (_wifiHot)
+            FillRound(g, _wifiHit, Px(8), UiTheme.Hover);
+        DrawWifi(g, new Rectangle(wifiLeft, y + (row - wifi) / 2, wifi, wifi), _snap.WifiUp || _snap.NetKnown, true);
+        int ratesX = wifiLeft + wifi + Px(8);
+        int ratesY = y + Math.Max(0, (row - ratesH) / 2);
+        DrawDown(g, new Rectangle(ratesX, ratesY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Down);
+        using (SolidBrush brush = new SolidBrush(UiTheme.Down))
+            g.DrawString(dText, _fontLabel, brush, ratesX + rateIcon + Px(3), ratesY + Math.Max(0, (lineH - _textH) / 2));
+        int upY = ratesY + lineH + Px(2);
+        DrawUp(g, new Rectangle(ratesX, upY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Up);
+        using (SolidBrush brush = new SolidBrush(UiTheme.Up))
+            g.DrawString(uText, _fontLabel, brush, ratesX + rateIcon + Px(3), upY + Math.Max(0, (lineH - _textH) / 2));
+
         // Compact battery: icons + percent, reserved from the right.
-        int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
-        int battLeft = right - battW;
-        int wifiLeft = _chevronHit.Right + Px(4);
-        int wifiRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
-        if (_wifiHot && wifiRight > wifiLeft)
-            FillRound(g, new Rectangle(wifiLeft, y, wifiRight - wifiLeft, row), Px(8), UiTheme.Hover);
-
-        int wifi = Px(18);
-        int nameH = (row - padY * 2) / 2;
-        int nameTop = y + padY;
-        int rateTop = nameTop + nameH;
-        DrawWifi(g, new Rectangle(wifiLeft, nameTop + Math.Max(0, (nameH - wifi) / 2), wifi, wifi), _snap.WifiUp, true);
-        int textX = wifiLeft + wifi + Px(6);
-        int nameW = Math.Max(0, wifiRight - textX);
-        using (SolidBrush brush = new SolidBrush(_snap.WifiUp ? TextMain : TextMuted))
-        using (StringFormat fmt = new StringFormat())
-        {
-            fmt.Alignment = StringAlignment.Near;
-            fmt.LineAlignment = StringAlignment.Center;
-            fmt.FormatFlags = StringFormatFlags.NoWrap;
-            fmt.Trimming = StringTrimming.EllipsisCharacter;
-            g.DrawString(NetworkLabel(), _fontValue, brush, new Rectangle(textX, nameTop, nameW, nameH), fmt);
-        }
-        DrawInlineRates(g, textX, rateTop, nameW, nameH);
-        _wifiHit = new Rectangle(wifiLeft, y, Math.Max(0, wifiRight - wifiLeft), row);
-
         if (_snap.BatteryKnown)
         {
-            int divX = battLeft - Px(4);
+            int battW = EstimateBatteryWidth(g);
+            int battLeft = right - battW;
+            int divX = Math.Max(_wifiHit.Right + gap, battLeft - Px(4));
             using (Pen pen = new Pen(Line, 1f))
                 g.DrawLine(pen, divX, y + padY, divX, y + row - padY);
             _batteryHit = new Rectangle(battLeft - Px(2), y, right - battLeft + Px(2), row);
@@ -847,19 +847,6 @@ internal sealed class PanelForm : Form
         }
     }
 
-    private string NetworkLabel()
-    {
-        if (_snap.WifiUp)
-        {
-            if (!string.IsNullOrEmpty(_snap.WifiSsid))
-                return _snap.WifiSsid;
-            return "Wi-Fi";
-        }
-        if (_snap.NetKnown)
-            return "Ethernet";
-        return "Offline";
-    }
-
     private int EstimateBatteryWidth(Graphics g)
     {
         string percent = _snap.BatteryPercent + "%";
@@ -873,42 +860,6 @@ internal sealed class PanelForm : Form
             icons = 1;
         // Extra slack — GDI+ MeasureString under-reports slightly vs DrawString.
         return (int)Math.Ceiling(size.Width) + icons * (Px(14) + Px(4)) + Px(8);
-    }
-
-    private void DrawInlineRates(Graphics g, int x, int y, int width, int height)
-    {
-        int icon = Px(11);
-        float down = _snap.NetKnown ? _snap.DownMBps : 0f;
-        float up = _snap.NetKnown ? _snap.UpMBps : 0f;
-        string dText = down.ToString("0.00") + " MB/s";
-        string uText = up.ToString("0.00") + " MB/s";
-        SizeF dSize = g.MeasureString(dText, _fontLabel);
-        SizeF uSize = g.MeasureString(uText, _fontLabel);
-        int dW = (int)Math.Ceiling(dSize.Width);
-        int uW = (int)Math.Ceiling(uSize.Width);
-        int gap = Px(12);
-        int need = icon + Px(3) + dW + gap + icon + Px(3) + uW;
-        if (need > width)
-        {
-            dText = down.ToString("0.00");
-            uText = up.ToString("0.00");
-            dSize = g.MeasureString(dText, _fontLabel);
-            uSize = g.MeasureString(uText, _fontLabel);
-            dW = (int)Math.Ceiling(dSize.Width);
-            uW = (int)Math.Ceiling(uSize.Width);
-            need = icon + Px(3) + dW + gap + icon + Px(3) + uW;
-            if (need > width)
-                return;
-        }
-        int gy = y + Math.Max(0, (height - icon) / 2);
-        int ty = y + Math.Max(0, (height - _textH) / 2);
-        DrawDown(g, new Rectangle(x, gy, icon, icon), UiTheme.Down);
-        using (SolidBrush brush = new SolidBrush(UiTheme.Down))
-            g.DrawString(dText, _fontLabel, brush, x + icon + Px(3), ty);
-        int ux = x + icon + Px(3) + dW + gap;
-        DrawUp(g, new Rectangle(ux, gy, icon, icon), UiTheme.Up);
-        using (SolidBrush brush = new SolidBrush(UiTheme.Up))
-            g.DrawString(uText, _fontLabel, brush, ux + icon + Px(3), ty);
     }
 
     private void DrawHeaderBatteryLeft(Graphics g, int x, int y, int row, int rightLimit)
@@ -954,25 +905,45 @@ internal sealed class PanelForm : Form
     private static void DrawWifi(Graphics g, Rectangle r, bool up, bool accent)
     {
         Color ink = !up ? UiTheme.Muted : (accent ? UiTheme.Down : UiTheme.Text);
-        float stroke = Math.Max(1.8f, r.Width / 10f);
+        float pad = Math.Max(1f, Math.Min(r.Width, r.Height) * 0.06f);
+        float size = Math.Min(r.Width, r.Height) - pad * 2f;
+        float left = r.Left + (r.Width - size) / 2f;
+        float top = r.Top + (r.Height - size) / 2f;
+        float cx = left + size / 2f;
+        // Anchor near the bottom so the three arcs fill the square (Fluent-style fan).
+        float cy = top + size * 0.86f;
+        float stroke = Math.Max(2.4f, size * 0.13f);
+        SmoothingMode prev = g.SmoothingMode;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
         using (Pen pen = new Pen(ink, stroke))
         {
             pen.StartCap = LineCap.Round;
             pen.EndCap = LineCap.Round;
-            int cx = r.Left + r.Width / 2;
-            int cy = r.Bottom - Math.Max(2, r.Height / 10);
-            int a1 = Math.Max(4, r.Width / 4);
-            int a2 = Math.Max(8, r.Width / 2);
-            int a3 = Math.Max(12, (r.Width * 3) / 4);
-            g.DrawArc(pen, cx - a1 / 2, cy - a1 / 2 - 1, a1, a1, 200, 140);
-            g.DrawArc(pen, cx - a2 / 2, cy - a2 / 2 - 1, a2, a2, 200, 140);
-            g.DrawArc(pen, cx - a3 / 2, cy - a3 / 2 - 1, a3, a3, 200, 140);
-            int dot = Math.Max(2, r.Width / 8);
+            pen.LineJoin = LineJoin.Round;
+            // Outer → mid → inner; diameters sized so the fan uses almost the full box.
+            float[] diams = new float[] { size * 0.96f, size * 0.62f, size * 0.30f };
+            const float start = 215f;
+            const float sweep = 110f;
+            for (int i = 0; i < diams.Length; i++)
+            {
+                float d = diams[i];
+                g.DrawArc(pen, cx - d / 2f, cy - d / 2f, d, d, start, sweep);
+            }
+            float dot = Math.Max(3f, size * 0.14f);
             using (SolidBrush brush = new SolidBrush(ink))
-                g.FillEllipse(brush, cx - dot / 2, cy - dot / 2, dot, dot);
+                g.FillEllipse(brush, cx - dot / 2f, cy - dot / 2f, dot, dot);
             if (!up)
-                g.DrawLine(pen, r.Left + 2, r.Top + 2, r.Right - 2, r.Bottom - 2);
+            {
+                using (Pen slash = new Pen(ink, stroke))
+                {
+                    slash.StartCap = LineCap.Round;
+                    slash.EndCap = LineCap.Round;
+                    g.DrawLine(slash, left + size * 0.12f, top + size * 0.12f,
+                        left + size * 0.88f, top + size * 0.78f);
+                }
+            }
         }
+        g.SmoothingMode = prev;
     }
 
     private static void DrawDown(Graphics g, Rectangle r, Color color)
@@ -1861,31 +1832,11 @@ internal sealed class PanelForm : Form
         bool hand = _wifiHot || _chevronHot || _batteryHot || _brightHover || _volHover
             || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;
         Cursor = hand ? Cursors.Hand : Cursors.Default;
-        UpdateTooltip(p);
 
         if (prev != _hover || prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
             || prevDisk != _chipHoverDisk || prevTrim != _trimHover || prevWifi != _wifiHot || prevChevron != _chevronHot
             || prevBatt != _batteryHot || prevBright != _brightHover || prevVol != _volHover)
             Invalidate();
-    }
-
-    private void UpdateTooltip(Point p)
-    {
-        string tip = "";
-        if (_chevronHit.Contains(p)) tip = QuickPopupOpen() ? "Close settings" : "Quick settings";
-        else if (_wifiHit.Contains(p)) tip = "Network settings";
-        else if (_batteryHit.Contains(p)) tip = "Power options";
-        else if (_brightHover) tip = "Brightness";
-        else if (_volHover) tip = _volumeKnown
-            ? (_volumeMuted ? "Volume (muted)" : "Volume " + (int)Math.Round(_volume01 * 100f) + "%")
-            : "Volume unavailable";
-        if (tip == _lastTip)
-            return;
-        _lastTip = tip;
-        if (string.IsNullOrEmpty(tip))
-            _tip.Hide(this);
-        else
-            _tip.Show(tip, this, p.X + 12, p.Y + 16, 2000);
     }
 
     internal void ScrollBy(int delta)

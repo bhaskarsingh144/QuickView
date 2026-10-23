@@ -40,9 +40,9 @@ Live CPU, memory, GPU, and disk metrics at a glance — with brightness and volu
 
 ### Status header / chrome
 
-- Live **Wi-Fi SSID** (Native WiFi API) with download / upload rates
+- Compact **network** block: Wi-Fi/Ethernet icon + download / upload rates (no SSID)
 - Compact **battery** percent with charging indicator
-- Click Wi-Fi → Windows network settings · Click battery → power options
+- Click network → Windows network settings · Click battery → power options
 - **Brightness** HyperOS-style fill block under the header — drag or scroll ±1%; panel soft-dims while scrolling so you can judge the screen
 - **Volume** vertical HyperOS-style fill on the right of the header/brightness column — drag or scroll ±1% (no dim)
 
