@@ -1,58 +1,33 @@
 # Manual test matrix — Accessibility Text size
 
-Covers Quick settings controls that drive **Settings → Accessibility → Text size** (“Make text bigger”).
+Drawer control for Windows **Settings → Accessibility → Text size**. A− / A+ in 5% steps, then **Apply** (same path as Settings Apply / “Please wait”).
 
-Automated math cases: `.\scripts\test.ps1`
-
-Ship only when every row is Pass or accepted Skip.
+Automated: `.\scripts\test.ps1` (TextScale suite).
 
 ## Baseline
 
 | Date | Build | Notes |
 |------|-------|-------|
-| | Text scale 5% + slider | |
+| | Chrome header revamp | |
 
 ## A. Automated
 
 | ID | Result | Notes |
 |----|--------|-------|
-| A1 `scripts\test.ps1` | | Exit 0; ClampAndSnap, slider map, A±, tile wrap |
+| A1 `scripts\test.ps1` | | Exit 0; ClampAndSnap, A±, tile wrap |
 
-## B. Drawer — pending (A− / A+ / slider)
-
-| ID | Result | Notes |
-|----|--------|-------|
-| B1 Open drawer | | Text size label matches current Accessibility %; Apply disabled |
-| B2 A+ / A− | | Pending % changes by 5; `*` shown; Apply enables; browser text **not** yet changed |
-| B3 Slider drag | | Pending % / thumb move; still no system change until Apply |
-| B4 A+ at 225 / A− at 100 | | Clamped |
-
-## C. Apply
+## B. Drawer — pending (A− / A+)
 
 | ID | Result | Notes |
 |----|--------|-------|
-| C1 Apply with dirty pending | | “Please wait” (or equivalent shell refresh); browser / apps redraw |
-| C2 Apply when not dirty | | No-op; button stays disabled/muted |
-| C3 After Apply | | `*` clears; Apply disabled; label matches Accessibility |
+| B1 A− | | −5%, marked dirty (*) |
+| B2 A+ | | +5%, marked dirty (*) |
+| B3 Clamp 100 / 225 | | |
+| B4 Apply | | Commits; * clears; UI text scales after WNF |
 
-## D. Actions grid
-
-| ID | Result | Notes |
-|----|--------|-------|
-| D1 No Text tile | | Grid has 8 actions; text only via dedicated row |
-
-## E. Regression
+## C. Regression
 
 | ID | Result | Notes |
 |----|--------|-------|
-| E1 Brightness slider | | Still drags |
-| E2 Volume slider | | Still drags |
-| E3 Mute / tiles | | Unchanged |
-
-## F. Windows Settings cross-check
-
-| ID | Result | Notes |
-|----|--------|-------|
-| F1 Search “Make text bigger” | | Opens Accessibility → Text size |
-| F2 Apply in QuickView | | Settings page reflects new % after refresh/reopen |
-| F3 Apply in Settings | | QuickView label matches after reopen drawer / next poll |
+| C1 Main brightness / volume | | Still on panel chrome |
+| C2 Mute tile | | Still in Actions grid |

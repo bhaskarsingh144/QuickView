@@ -51,8 +51,13 @@ internal static class OpacityFadeTests
         if (OpacityFade.IdleElapsed(deadline, deadline)) { Pass("idle at deadline"); } else { Fail("idle at deadline"); }
         if (OpacityFade.IdleElapsed(deadline.AddMilliseconds(1), deadline)) { Pass("idle after deadline"); } else { Fail("idle after deadline"); }
 
-        if (OpacityFade.Preview < 0.2) { Pass("preview very transparent"); } else { Fail("preview very transparent"); }
+        if (OpacityFade.Preview > 0.25 && OpacityFade.Preview < 0.5) { Pass("preview moderately transparent"); } else { Fail("preview moderately transparent"); }
         if (OpacityFade.Normal > 0.9) { Pass("normal near opaque"); } else { Fail("normal near opaque"); }
+        if (OpacityFade.PanelNormal > 0.9 && OpacityFade.PanelNormal < OpacityFade.Normal)
+            Pass("panel normal slightly below drawer normal");
+        else
+            Fail("panel normal slightly below drawer normal");
+        ExpectDouble(OpacityFade.PanelNormal, OpacityFade.OpacityAt(OpacityFade.Preview, OpacityFade.PanelNormal, OpacityFade.FadeInMs, OpacityFade.FadeInMs), 0.0001, "fade in ends at PanelNormal");
 
         Console.WriteLine();
         Console.WriteLine("OpacityFade tests: {0} passed, {1} failed", _passed, _failed);
