@@ -7,6 +7,8 @@ using System;
 internal static class OpacityFade
 {
     public const double Normal = 0.98;
+    /// <summary>Main panel resting opacity (PanelForm).</summary>
+    public const double PanelNormal = 0.94;
     public const double Preview = 0.08;
     public const int IdleMs = 650;
     public const int FadeOutMs = 160;

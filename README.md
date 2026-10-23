@@ -43,6 +43,7 @@ Live CPU, memory, GPU, and disk metrics at a glance — plus a quick settings dr
 - Live **Wi-Fi SSID** (Native WiFi API) with download / upload rates
 - **Battery** percent with charging indicator
 - Click Wi-Fi → Windows network settings · Click battery → power options
+- Thin **brightness** slider under the header (no label) — drag or scroll ±1%; panel fades clear while scrolling (same preview as the drawer)
 
 ### Quick settings drawer
 
@@ -98,7 +99,7 @@ Output: `bin\QuickView.exe`
 .\scripts\test.ps1
 ```
 
-Runs unit tests (TextScale + SliderWheel). Manual matrices: [docs/TEST-TextScale.md](docs/TEST-TextScale.md), [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md).
+Runs unit tests (TextScale, SliderWheel, OpacityFade). Manual matrices: [docs/TEST-TextScale.md](docs/TEST-TextScale.md), [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md).
 
 ---
 
