@@ -2,7 +2,7 @@
 
 **A lightweight system monitor for the right edge of your Windows desktop.**
 
-Live CPU, memory, GPU, and disk metrics at a glance — plus a quick settings drawer for brightness, volume, text scale, and everyday system actions. No installer required. No telemetry. Runs locally.
+Live CPU, memory, GPU, and disk metrics at a glance — with brightness and volume on the main chrome, plus a quick settings drawer for text scale and everyday system actions. No installer required. No telemetry. Runs locally.
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.5%2B-512BD4?style=flat-square)
@@ -38,12 +38,13 @@ Live CPU, memory, GPU, and disk metrics at a glance — plus a quick settings dr
 - **Process lists** on CPU and Memory views, color-coded (system / Windows apps / installed apps)
 - **Memory Trim** — shrinks background working sets without closing apps
 
-### Status header
+### Status header / chrome
 
 - Live **Wi-Fi SSID** (Native WiFi API) with download / upload rates
-- **Battery** percent with charging indicator
+- Compact **battery** percent with charging indicator
 - Click Wi-Fi → Windows network settings · Click battery → power options
-- **Brightness** fill-block under the header (HyperOS-style rounded bar, no label) — drag or scroll ±1%; panel soft-dims while scrolling (same preview as the drawer)
+- **Brightness** HyperOS-style fill block under the header — drag or scroll ±1%; panel soft-dims while scrolling so you can judge the screen
+- **Volume** vertical HyperOS-style fill on the right of the header/brightness column — drag or scroll ±1% (no dim)
 
 ### Quick settings drawer
 
@@ -51,9 +52,7 @@ Open from the left-edge chevron (hover or click):
 
 | Section | What you get |
 | --- | --- |
-| **Display** | Per-monitor brightness (DDC/CI and WMI); hover slider and scroll wheel ±1% (drawer fades nearly clear while scrolling so you can judge the screen) |
-| **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ and slider (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
-| **Sound** | Volume slider and mute; hover slider and scroll wheel ±1% |
+| **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
 | **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute |
 
 Restart and Shut down require a second confirm within two seconds.
