@@ -1,0 +1,188 @@
+# QuickView
+
+**A lightweight system monitor for the right edge of your Windows desktop.**
+
+Live CPU, memory, GPU, and disk metrics at a glance — plus a quick settings drawer for brightness, volume, text scale, and everyday system actions. No installer required. No telemetry. Runs locally.
+
+![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
+![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.5%2B-512BD4?style=flat-square)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
+![Size](https://img.shields.io/badge/Deps-None-success?style=flat-square)
+
+---
+
+## Screenshots
+
+> Drop your images into [`assets/`](assets/) and they will show up here.
+
+| Resting panel | Metric detail | Quick settings |
+| :---: | :---: | :---: |
+| ![Resting panel](assets/screenshot-panel.png) | ![CPU / Memory / GPU / Disk views](assets/screenshot-metrics.png) | ![Quick settings drawer](assets/screenshot-settings.png) |
+
+<!-- Optional full-width shots:
+![Header with Wi-Fi and battery](assets/screenshot-header.png)
+![Panel parked / edge reveal](assets/screenshot-park.png)
+-->
+
+---
+
+## Features
+
+### Real-time monitoring
+
+- **CPU** — usage %, processor name, cores/threads, rated and live clock, per-core clocks, optional temperature
+- **Memory** — in-use (Task Manager–aligned), committed, cached, paged/non-paged pools, module info, optional temperature
+- **GPU** — 3D engine usage (capped at 100%), dedicated and shared adapter memory, optional temperature
+- **Disk** — busy time, space in use, read/write rates, physical drive names/size/media type
+- **60-second history graphs** on the resting page and in every metric view
+- **Process lists** on CPU and Memory views, color-coded (system / Windows apps / installed apps)
+- **Memory Trim** — shrinks background working sets without closing apps
+
+### Status header
+
+- Live **Wi-Fi SSID** (Native WiFi API) with download / upload rates
+- **Battery** percent with charging indicator
+- Click Wi-Fi → Windows network settings · Click battery → power options
+
+### Quick settings drawer
+
+Open from the left-edge chevron (hover or click):
+
+| Section | What you get |
+| --- | --- |
+| **Display** | Per-monitor brightness (DDC/CI and WMI) |
+| **Text** | System text scale 100–225% (A− / A+) |
+| **Sound** | Volume slider and mute |
+| **Actions** | 3×3 grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute, Text |
+
+Restart and Shut down require a second confirm within two seconds.
+
+### Smart shell behavior
+
+- Stays visible beside normal windows; **parks off-screen** when a window is maximized or full-screen
+- **Reveal on right-edge hover**; parks again when you leave
+- **Pinned to all virtual desktops**; hidden from Task View clutter
+- Survives **Show Desktop** correctly
+- **Per-monitor DPI aware** — sharp text on high-DPI and mixed-DPI setups
+- Auto-starts on login (optional; easy to disable)
+
+---
+
+## Quick start
+
+### Standalone (no install)
+
+```bat
+scripts\setup-standalone.bat
+```
+
+Compiles to `bin\QuickView.exe`, creates `run.bat`, and launches the panel.
+
+### System install
+
+Right-click `scripts\setup.bat` → **Run as administrator**.
+
+Installs to `C:\Program Files\QuickView`, adds Desktop and Start Menu shortcuts, and starts the app.
+
+### Build only
+
+```powershell
+.\scripts\build.ps1
+```
+
+Output: `bin\QuickView.exe`
+
+---
+
+## Usage
+
+| Situation | Behavior |
+| --- | --- |
+| Desktop / normal windows | Panel stays on the right edge |
+| Maximized or full-screen | Parks off-screen; move pointer to the right edge to show |
+| Virtual desktops | Same panel on every desktop |
+| Show Desktop | Panel returns when the desktop is showing |
+
+**Metric chips** — click CPU, Memory, GPU, or Disk for a detailed view; click again to return to the resting page.
+
+**Quick settings** — chevron on the left edge of the panel (◀ / ▶). Esc or leave the drawer to close.
+
+---
+
+## Requirements
+
+- Windows 10 or Windows 11
+- .NET Framework 4.5+ (already on modern Windows)
+- No extra runtimes or packages
+
+---
+
+## Disabling auto-start
+
+On first run QuickView adds a Startup shortcut. To turn that off, delete:
+
+```text
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\QuickView.lnk
+```
+
+The app will not recreate it unless you clear the preference under `%LOCALAPPDATA%\QuickView`.
+
+---
+
+## Uninstalling
+
+**Installed with `setup.bat`**
+
+```bat
+C:\Program Files\QuickView\uninstall.bat
+```
+
+**Standalone**
+
+1. Close QuickView  
+2. Delete the repo folder  
+3. Remove the Startup shortcut (path above)  
+4. Optionally delete `%LOCALAPPDATA%\QuickView`
+
+---
+
+## Project structure
+
+```text
+QuickView/
+├── src/              # C# sources (WinForms)
+├── scripts/          # build.ps1, setup.bat, setup-standalone.bat
+├── assets/           # Screenshots for this README
+├── bin/              # Build output (generated)
+├── LICENSE           # MIT
+├── CONTRIBUTING.md
+└── README.md
+```
+
+---
+
+## Contributing
+
+Bugs, fixes, and ideas welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build steps and guidelines.
+
+---
+
+## Troubleshooting
+
+| Issue | What to try |
+| --- | --- |
+| Won't start | Confirm .NET Framework 4.5+; check `quickview.log` next to the exe |
+| Brightness does nothing | Needs DDC/CI or WMI; many external monitors lack software brightness |
+| No temperature | Only shown when Windows publishes a real WMI reading — often blank on laptops |
+
+---
+
+## Privacy
+
+Everything stays on your PC. QuickView does not collect, upload, or phone home with system data.
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Bhaskar Singh
