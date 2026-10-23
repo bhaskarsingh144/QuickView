@@ -37,6 +37,8 @@ internal sealed class PanelForm : Form
     private readonly System.Windows.Forms.Timer _mouseTimer;
     private Font _fontLabel;
     private Font _fontValue;
+    private Font _fontRate;
+    private Font _fontLevel;
     private Snapshot _snap = Snapshot.Empty();
     private DetailMode _detail = DetailMode.None;
     private bool _shown;
@@ -193,6 +195,10 @@ internal sealed class PanelForm : Form
         _brightness.Dispose();
         _fontLabel.Dispose();
         _fontValue.Dispose();
+        if (_fontRate != null)
+            _fontRate.Dispose();
+        if (_fontLevel != null)
+            _fontLevel.Dispose();
         Application.RemoveMessageFilter(_wheel);
         base.OnFormClosed(e);
     }
@@ -256,13 +262,49 @@ internal sealed class PanelForm : Form
         float fit = Fit();
         Font oldLabel = _fontLabel;
         Font oldValue = _fontValue;
+        Font oldRate = _fontRate;
+        Font oldLevel = _fontLevel;
         _fontLabel = new Font("Segoe UI", 11f * fit, FontStyle.Regular, GraphicsUnit.Point);
         _fontValue = new Font("Segoe UI", 12f * fit, FontStyle.Regular, GraphicsUnit.Point);
+        // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
+        _fontRate = CreateMetricFont(10.5f * fit);
+        _fontLevel = CreateMetricFont(11f * fit);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
         if (oldValue != null)
             oldValue.Dispose();
+        if (oldRate != null)
+            oldRate.Dispose();
+        if (oldLevel != null)
+            oldLevel.Dispose();
+    }
+
+    /// <summary>
+    /// Prefer Bahnschrift (stroke-contrast geometric) then Segoe UI Semibold for metric text.
+    /// </summary>
+    private static Font CreateMetricFont(float emSize)
+    {
+        string[] names = new string[] { "Bahnschrift SemiBold", "Bahnschrift", "Segoe UI Semibold", "Segoe UI" };
+        for (int i = 0; i < names.Length; i++)
+        {
+            string name = names[i];
+            FontStyle style = (name == "Bahnschrift" || name == "Segoe UI") ? FontStyle.Bold : FontStyle.Regular;
+            try
+            {
+                Font font = new Font(name, emSize, style, GraphicsUnit.Point);
+                string family = font.FontFamily.Name;
+                bool ok = family.IndexOf("Bahnschrift", StringComparison.OrdinalIgnoreCase) >= 0
+                    || family.IndexOf("Segoe", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (ok)
+                    return font;
+                font.Dispose();
+            }
+            catch
+            {
+            }
+        }
+        return new Font("Segoe UI", emSize, FontStyle.Bold, GraphicsUnit.Point);
     }
 
     private float Fit()
@@ -636,18 +678,8 @@ internal sealed class PanelForm : Form
         if (_volumeMuted)
             v = 0f;
         QuickActions.DrawFillBlockVertical(g, _volTrack, v, back, UiTheme.Accent);
-        // Small speaker glyph near the top of the column.
-        int icon = Math.Min(Px(16), _volTrack.Width - Px(6));
-        if (icon >= 10)
-        {
-            Rectangle glyph = new Rectangle(
-                _volTrack.X + (_volTrack.Width - icon) / 2,
-                _volTrack.Y + Px(6),
-                icon,
-                icon);
-            Color ink = _volumeKnown ? TextMain : TextMuted;
-            QuickActions.GlyphSpeaker(g, glyph, ink, !_volumeKnown || _volumeMuted);
-        }
+        int pct = _volumeKnown ? (int)Math.Round(v * 100f) : 0;
+        DrawLevelLabel(g, _volTrack, pct.ToString(), _fontLevel);
     }
 
     private int BrightnessStrip(Graphics g, int x, int y, int inner)
@@ -674,8 +706,27 @@ internal sealed class PanelForm : Form
                 ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
                 : Track;
             QuickActions.DrawFillBlock(g, _brightTrack, v, back, UiTheme.Accent);
+            DrawLevelLabel(g, _brightTrack, mon.Percent.ToString(), _fontLevel);
         }
         return y + blockH + gapBelow;
+    }
+
+    private void DrawLevelLabel(Graphics g, Rectangle bounds, string text, Font font)
+    {
+        if (font == null || string.IsNullOrEmpty(text))
+            return;
+        using (StringFormat fmt = new StringFormat())
+        {
+            fmt.Alignment = StringAlignment.Center;
+            fmt.LineAlignment = StringAlignment.Center;
+            fmt.FormatFlags = StringFormatFlags.NoWrap;
+            // Soft shadow so digits stay readable over both track and accent fill.
+            using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
+                g.DrawString(text, font, shadow,
+                    new Rectangle(bounds.X + 1, bounds.Y + 1, bounds.Width, bounds.Height), fmt);
+            using (SolidBrush brush = new SolidBrush(TextMain))
+                g.DrawString(text, font, brush, bounds, fmt);
+        }
     }
 
     private BrightnessMonitor FirstControllableBrightness()
@@ -786,12 +837,14 @@ internal sealed class PanelForm : Form
         float up = _snap.NetKnown ? _snap.UpMBps : 0f;
         string dText = down.ToString("0.00") + " MB/s";
         string uText = up.ToString("0.00") + " MB/s";
-        SizeF dSize = g.MeasureString(dText, _fontLabel);
-        SizeF uSize = g.MeasureString(uText, _fontLabel);
+        Font rateFont = _fontRate ?? _fontLabel;
+        int rateTextH = (int)Math.Ceiling(rateFont.GetHeight()) + 1;
+        SizeF dSize = g.MeasureString(dText, rateFont);
+        SizeF uSize = g.MeasureString(uText, rateFont);
         int dW = (int)Math.Ceiling(dSize.Width);
         int uW = (int)Math.Ceiling(uSize.Width);
         int rateColW = rateIcon + Px(3) + Math.Max(dW, uW);
-        int lineH = Math.Max(_textH, rateIcon);
+        int lineH = Math.Max(rateTextH, rateIcon);
         int ratesH = lineH * 2 + Px(2);
         int netW = wifi + Px(8) + rateColW;
         int wifiLeft = _chevronHit.Right + Px(6);
@@ -803,11 +856,11 @@ internal sealed class PanelForm : Form
         int ratesY = y + Math.Max(0, (row - ratesH) / 2);
         DrawDown(g, new Rectangle(ratesX, ratesY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Down);
         using (SolidBrush brush = new SolidBrush(UiTheme.Down))
-            g.DrawString(dText, _fontLabel, brush, ratesX + rateIcon + Px(3), ratesY + Math.Max(0, (lineH - _textH) / 2));
+            g.DrawString(dText, rateFont, brush, ratesX + rateIcon + Px(3), ratesY + Math.Max(0, (lineH - rateTextH) / 2));
         int upY = ratesY + lineH + Px(2);
         DrawUp(g, new Rectangle(ratesX, upY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Up);
         using (SolidBrush brush = new SolidBrush(UiTheme.Up))
-            g.DrawString(uText, _fontLabel, brush, ratesX + rateIcon + Px(3), upY + Math.Max(0, (lineH - _textH) / 2));
+            g.DrawString(uText, rateFont, brush, ratesX + rateIcon + Px(3), upY + Math.Max(0, (lineH - rateTextH) / 2));
 
         // Compact battery: icons + percent, reserved from the right.
         if (_snap.BatteryKnown)
