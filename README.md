@@ -98,7 +98,7 @@ Output: `bin\QuickView.exe`
 .\scripts\test.ps1
 ```
 
-Runs unit tests (TextScale, SliderWheel, OpacityFade). Manual matrices: [docs/TEST-TextScale.md](docs/TEST-TextScale.md), [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md).
+Runs unit tests (TextScale, SliderWheel, OpacityFade, DisplayScale). Manual matrices: [docs/TEST-TextScale.md](docs/TEST-TextScale.md), [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md), [docs/TEST-DisplayScale.md](docs/TEST-DisplayScale.md).
 
 ---
 

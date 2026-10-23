@@ -18,7 +18,7 @@ if (-not (Test-Path $csc)) {
     exit 1
 }
 
-function Run-Suite([string]$name, [string[]]$sources, [string]$exeName) {
+function Run-Suite([string]$name, [string[]]$sources, [string]$exeName, [string[]]$refs = @()) {
     foreach ($f in $sources) {
         if (-not (Test-Path $f)) {
             Write-Error "Missing source: $f"
@@ -27,7 +27,12 @@ function Run-Suite([string]$name, [string[]]$sources, [string]$exeName) {
     }
     $exePath = Join-Path $outputDir $exeName
     Write-Host "Compiling $name..." -ForegroundColor Cyan
-    & $csc /nologo /optimize /target:exe /out:$exePath $sources
+    $args = @("/nologo", "/optimize", "/target:exe", "/out:$exePath")
+    foreach ($r in $refs) {
+        $args += "/r:$r"
+    }
+    $args += $sources
+    & $csc @args
     if ($LASTEXITCODE -ne 0) {
         Write-Error "$name compile failed"
         exit 1
@@ -55,6 +60,15 @@ Run-Suite "OpacityFadeTests" @(
     (Join-Path $srcDir "OpacityFade.cs"),
     (Join-Path $testsDir "OpacityFadeTests.cs")
 ) "OpacityFadeTests.exe"
+
+Run-Suite "DisplayScaleTests" @(
+    (Join-Path $srcDir "DisplayScale.cs"),
+    (Join-Path $testsDir "DisplayScaleTests.cs")
+) "DisplayScaleTests.exe" @(
+    "System.Drawing.dll",
+    "System.Windows.Forms.dll",
+    "System.Management.dll"
+)
 
 Write-Host "All test suites passed." -ForegroundColor Green
 exit 0
