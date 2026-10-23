@@ -25,6 +25,9 @@ Automated: `.\scripts\test.ps1` (SliderWheelTests).
 | B3 At 0 / 100 | | Clamps; no wrap |
 | B4 Hover thumb | | Same as track |
 | B5 Pointer off slider | | Wheel does not change brightness |
+| B6 While scrolling | | Drawer fades to near-transparent (desktop visible) |
+| B7 After ~0.65s idle | | Drawer fades back to normal opacity |
+| B8 Continuous scroll | | Stays dim until scrolling stops + idle |
 
 ## C. Volume
 
