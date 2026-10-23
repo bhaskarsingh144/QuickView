@@ -43,6 +43,14 @@ internal static class SliderWheelTests
             v = SliderWheel.AdjustVolume01(v, -120);
         ExpectFloat(0.40f, v, 0.0001f, "10 wheel notches volume 50%→40%");
 
+        // Vertical track: bottom = 0, top = 1
+        ExpectFloat(0f, SliderWheel.VolumeFromVerticalY(100, 0, 100), 0.0001f, "vertical y=bottom → 0");
+        ExpectFloat(1f, SliderWheel.VolumeFromVerticalY(0, 0, 100), 0.0001f, "vertical y=top → 1");
+        ExpectFloat(0.5f, SliderWheel.VolumeFromVerticalY(50, 0, 100), 0.0001f, "vertical y=mid → 0.5");
+        ExpectFloat(0f, SliderWheel.VolumeFromVerticalY(200, 0, 100), 0.0001f, "vertical y below → clamp 0");
+        ExpectFloat(1f, SliderWheel.VolumeFromVerticalY(-10, 0, 100), 0.0001f, "vertical y above → clamp 1");
+        ExpectFloat(0f, SliderWheel.VolumeFromVerticalY(0, 0, 0), 0.0001f, "vertical zero height → 0");
+
         Console.WriteLine();
         Console.WriteLine("SliderWheel tests: {0} passed, {1} failed", _passed, _failed);
         return _failed == 0 ? 0 : 1;

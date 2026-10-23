@@ -63,8 +63,6 @@ internal sealed class QuickActions
     public QuickArm Armed = QuickArm.None;
     public DateTime ArmedUntil = DateTime.MinValue;
     public int DragBrightIndex = -1;
-    public bool DragVolume;
-    public bool DragText;
 
     public void ClearHits()
     {
@@ -269,6 +267,33 @@ internal sealed class QuickActions
         if (fillW > block.Width)
             fillW = block.Width;
         Rectangle fill = new Rectangle(block.X, block.Y, fillW, block.Height);
+        using (GraphicsPath path = Round(fill, radius))
+        using (SolidBrush brush = new SolidBrush(fillColor))
+            g.FillPath(brush, path);
+    }
+
+    /// <summary>
+    /// Vertical HyperOS-style volume block: fill rises from the bottom.
+    /// </summary>
+    public static void DrawFillBlockVertical(Graphics g, Rectangle block, float value01, Color trackColor, Color fillColor)
+    {
+        if (value01 < 0f) value01 = 0f;
+        if (value01 > 1f) value01 = 1f;
+        int radius = Math.Max(8, block.Width / 2);
+        if (g == null)
+            return;
+        using (GraphicsPath path = Round(block, radius))
+        using (SolidBrush brush = new SolidBrush(trackColor))
+            g.FillPath(brush, path);
+        int fillH = (int)Math.Round(block.Height * value01);
+        if (fillH <= 0)
+            return;
+        int minFill = Math.Min(block.Height, Math.Max(radius, block.Width));
+        if (fillH < minFill)
+            fillH = minFill;
+        if (fillH > block.Height)
+            fillH = block.Height;
+        Rectangle fill = new Rectangle(block.X, block.Bottom - fillH, block.Width, fillH);
         using (GraphicsPath path = Round(fill, radius))
         using (SolidBrush brush = new SolidBrush(fillColor))
             g.FillPath(brush, path);

@@ -88,6 +88,12 @@ internal sealed class PanelForm : Form
     private string _brightId = "";
     private bool _brightDragging;
     private bool _brightHover;
+    private Rectangle _volTrack;
+    private bool _volDragging;
+    private bool _volHover;
+    private float _volume01;
+    private bool _volumeMuted;
+    private bool _volumeKnown;
     private readonly System.Windows.Forms.Timer _fade;
     private double _fadeFrom = OpacityFade.PanelNormal;
     private double _fadeTo = OpacityFade.PanelNormal;
@@ -212,6 +218,8 @@ internal sealed class PanelForm : Form
             BeginInvoke(new Action(delegate
             {
                 _snap = snap;
+                if (!_volDragging)
+                    RefreshPanelVolume();
                 ApplySize();
                 Invalidate();
             }));
@@ -455,7 +463,7 @@ internal sealed class PanelForm : Form
         if (!IsHandleCreated)
             return;
         if (_quickPopup == null || _quickPopup.IsDisposed)
-            _quickPopup = new QuickSettingsPopup(_audio, _brightness, _dpi, Fit());
+            _quickPopup = new QuickSettingsPopup(_audio, _dpi, Fit());
         _quickPopup.ShowBesidePanel(Bounds);
         RaiseQuickPopup();
         _quickLeaveSince = DateTime.MinValue;
@@ -517,7 +525,11 @@ internal sealed class PanelForm : Form
                 ResetOpacityImmediate();
             }
             if (show && !_shown)
+            {
                 _brightness.Refresh();
+                _audio.Refresh();
+                RefreshPanelVolume();
+            }
             _shown = show;
             Left = left;
             Top = top;
@@ -602,9 +614,47 @@ internal sealed class PanelForm : Form
         int x = Px(16);
         int y = Px(14);
         int inner = ContentInner();
-        y = Header(g, x, y, inner);
-        y = BrightnessStrip(g, x, y, inner);
+        int volW = Px(28);
+        int gap = Px(8);
+        int mainW = Math.Max(Px(120), inner - volW - gap);
+        int y0 = y;
+        y = Header(g, x, y, mainW);
+        int afterHeader = y;
+        y = BrightnessStrip(g, x, y, mainW);
+        int volBottom = FirstControllableBrightness() != null
+            ? y - Px(10)
+            : afterHeader - Px(14);
+        if (volBottom < y0 + Px(40))
+            volBottom = y0 + Px(40);
+        _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(40), volBottom - y0));
+        if (g != null)
+            DrawVolumeColumn(g);
         return Chips(g, x, y, inner);
+    }
+
+    private void DrawVolumeColumn(Graphics g)
+    {
+        if (_volTrack.Width < 1 || _volTrack.Height < 1)
+            return;
+        Color back = _volHover || _volDragging
+            ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
+            : Track;
+        float v = _volumeKnown ? _volume01 : 0f;
+        if (_volumeMuted)
+            v = 0f;
+        QuickActions.DrawFillBlockVertical(g, _volTrack, v, back, UiTheme.Accent);
+        // Small speaker glyph near the top of the column.
+        int icon = Math.Min(Px(16), _volTrack.Width - Px(6));
+        if (icon >= 10)
+        {
+            Rectangle glyph = new Rectangle(
+                _volTrack.X + (_volTrack.Width - icon) / 2,
+                _volTrack.Y + Px(6),
+                icon,
+                icon);
+            Color ink = _volumeKnown ? TextMain : TextMuted;
+            QuickActions.GlyphSpeaker(g, glyph, ink, !_volumeKnown || _volumeMuted);
+        }
     }
 
     private int BrightnessStrip(Graphics g, int x, int y, int inner)
@@ -650,6 +700,25 @@ internal sealed class PanelForm : Form
         return _brightTrack.Width > 0 && _brightTrack.Contains(clientPt);
     }
 
+    internal bool VolumeColumnContains(Point clientPt)
+    {
+        return _volTrack.Width > 0 && _volTrack.Contains(clientPt);
+    }
+
+    private void RefreshPanelVolume()
+    {
+        float vol;
+        bool muted;
+        if (_audio.TryGetVolume(out vol, out muted))
+        {
+            _volume01 = vol;
+            _volumeMuted = muted;
+            _volumeKnown = true;
+        }
+        else
+            _volumeKnown = false;
+    }
+
     private int Body(Graphics g, int y)
     {
         int x = Px(16);
@@ -679,15 +748,15 @@ internal sealed class PanelForm : Form
 
     private int Header(Graphics g, int x, int y, int inner)
     {
-        int row = Px(52);
+        int row = Px(44);
         if (g != null)
         {
             DrawStatus(g, x, y, inner, row);
-            int lineY = y + row + Px(6);
+            int lineY = y + row + Px(4);
             using (Pen hair = new Pen(Line, 1f))
                 g.DrawLine(hair, x, lineY, x + inner, lineY);
         }
-        return y + row + Px(14);
+        return y + row + Px(10);
     }
 
     private void DrawStatus(Graphics g, int x, int y, int inner, int row)
@@ -699,11 +768,11 @@ internal sealed class PanelForm : Form
         if (g == null)
             return;
 
-        int gap = Px(8);
+        int gap = Px(6);
         int right = x + inner;
-        int padY = Px(6);
+        int padY = Px(4);
         // Large hit target; glyph stays centered inside it.
-        int chevHit = Math.Min(row - Px(4), Px(36));
+        int chevHit = Math.Min(row - Px(2), Px(36));
         int chevGlyph = Px(18);
         _chevronHit = new Rectangle(x, y + (row - chevHit) / 2, chevHit, chevHit);
         bool open = QuickPopupOpen();
@@ -716,20 +785,20 @@ internal sealed class PanelForm : Form
             chevGlyph);
         DrawHeaderChevron(g, chevGlyphRect, open, open || _chevronHot ? TextMain : TextMuted);
 
-        // Reserve battery width first so "100%" never clips.
+        // Compact battery: icons + percent, reserved from the right.
         int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
         int battLeft = right - battW;
-        int wifiLeft = _chevronHit.Right + Px(6);
-        int wifiRight = _snap.BatteryKnown ? battLeft - gap - Px(8) : right;
+        int wifiLeft = _chevronHit.Right + Px(4);
+        int wifiRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
         if (_wifiHot && wifiRight > wifiLeft)
             FillRound(g, new Rectangle(wifiLeft, y, wifiRight - wifiLeft, row), Px(8), UiTheme.Hover);
 
-        int wifi = Px(22);
+        int wifi = Px(18);
         int nameH = (row - padY * 2) / 2;
         int nameTop = y + padY;
         int rateTop = nameTop + nameH;
         DrawWifi(g, new Rectangle(wifiLeft, nameTop + Math.Max(0, (nameH - wifi) / 2), wifi, wifi), _snap.WifiUp, true);
-        int textX = wifiLeft + wifi + Px(8);
+        int textX = wifiLeft + wifi + Px(6);
         int nameW = Math.Max(0, wifiRight - textX);
         using (SolidBrush brush = new SolidBrush(_snap.WifiUp ? TextMain : TextMuted))
         using (StringFormat fmt = new StringFormat())
@@ -745,10 +814,10 @@ internal sealed class PanelForm : Form
 
         if (_snap.BatteryKnown)
         {
-            int divX = battLeft - Px(8);
+            int divX = battLeft - Px(4);
             using (Pen pen = new Pen(Line, 1f))
                 g.DrawLine(pen, divX, y + padY, divX, y + row - padY);
-            _batteryHit = new Rectangle(battLeft - Px(4), y, right - battLeft + Px(4), row);
+            _batteryHit = new Rectangle(battLeft - Px(2), y, right - battLeft + Px(2), row);
             if (_batteryHot)
                 FillRound(g, _batteryHit, Px(8), UiTheme.Hover);
             DrawHeaderBatteryLeft(g, battLeft, y, row, right);
@@ -1636,6 +1705,12 @@ internal sealed class PanelForm : Form
             Capture = false;
             return;
         }
+        if (_volDragging)
+        {
+            _volDragging = false;
+            Capture = false;
+            return;
+        }
         if (_dragging)
         {
             _dragging = false;
@@ -1699,6 +1774,13 @@ internal sealed class PanelForm : Form
             ApplyPanelBrightnessAt(e.X);
             return;
         }
+        if (VolumeColumnContains(e.Location) && _volumeKnown)
+        {
+            _volDragging = true;
+            Capture = true;
+            ApplyPanelVolumeAt(e.Y);
+            return;
+        }
         if (_gutter <= 0)
             return;
         if (_thumbRect.Contains(e.Location))
@@ -1726,6 +1808,11 @@ internal sealed class PanelForm : Form
         if (_brightDragging)
         {
             ApplyPanelBrightnessAt(e.X);
+            return;
+        }
+        if (_volDragging)
+        {
+            ApplyPanelVolumeAt(e.Y);
             return;
         }
         if (_dragging)
@@ -1764,19 +1851,21 @@ internal sealed class PanelForm : Form
         bool prevChevron = _chevronHot;
         bool prevBatt = _batteryHot;
         bool prevBright = _brightHover;
+        bool prevVol = _volHover;
         _wifiHot = _wifiHit.Contains(p);
         _chevronHot = _chevronHit.Contains(p);
         _batteryHot = _batteryHit.Contains(p);
         _brightHover = BrightnessStripContains(p);
+        _volHover = VolumeColumnContains(p);
 
-        bool hand = _wifiHot || _chevronHot || _batteryHot || _brightHover
+        bool hand = _wifiHot || _chevronHot || _batteryHot || _brightHover || _volHover
             || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;
         Cursor = hand ? Cursors.Hand : Cursors.Default;
         UpdateTooltip(p);
 
         if (prev != _hover || prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
             || prevDisk != _chipHoverDisk || prevTrim != _trimHover || prevWifi != _wifiHot || prevChevron != _chevronHot
-            || prevBatt != _batteryHot || prevBright != _brightHover)
+            || prevBatt != _batteryHot || prevBright != _brightHover || prevVol != _volHover)
             Invalidate();
     }
 
@@ -1787,6 +1876,9 @@ internal sealed class PanelForm : Form
         else if (_wifiHit.Contains(p)) tip = "Network settings";
         else if (_batteryHit.Contains(p)) tip = "Power options";
         else if (_brightHover) tip = "Brightness";
+        else if (_volHover) tip = _volumeKnown
+            ? (_volumeMuted ? "Volume (muted)" : "Volume " + (int)Math.Round(_volume01 * 100f) + "%")
+            : "Volume unavailable";
         if (tip == _lastTip)
             return;
         _lastTip = tip;
@@ -1827,6 +1919,23 @@ internal sealed class PanelForm : Form
             Invalidate();
     }
 
+    private void ApplyPanelVolumeAt(int y)
+    {
+        if (_volTrack.Height < 1 || !_volumeKnown)
+            return;
+        float v = SliderWheel.VolumeFromVerticalY(y, _volTrack.Y, _volTrack.Height);
+        if (_audio.TrySetVolume(v))
+        {
+            _volume01 = v;
+            if (v > 0.001f && _volumeMuted)
+            {
+                _audio.TrySetMute(false);
+                _volumeMuted = false;
+            }
+            Invalidate();
+        }
+    }
+
     internal void NudgePanelBrightness(int wheelDelta)
     {
         if (string.IsNullOrEmpty(_brightId))
@@ -1844,6 +1953,23 @@ internal sealed class PanelForm : Form
         if (_brightness.TrySet(_brightId, next))
         {
             BeginBrightnessPreview();
+            Invalidate();
+        }
+    }
+
+    internal void NudgePanelVolume(int wheelDelta)
+    {
+        if (!_volumeKnown)
+            return;
+        float next = SliderWheel.AdjustVolume01(_volume01, wheelDelta);
+        if (_audio.TrySetVolume(next))
+        {
+            _volume01 = next;
+            if (next > 0.001f && _volumeMuted)
+            {
+                _audio.TrySetMute(false);
+                _volumeMuted = false;
+            }
             Invalidate();
         }
     }
@@ -2123,6 +2249,11 @@ internal sealed class PanelForm : Form
                 if (_form.BrightnessStripContains(client))
                 {
                     _form.NudgePanelBrightness(delta);
+                    return true;
+                }
+                if (_form.VolumeColumnContains(client))
+                {
+                    _form.NudgePanelVolume(delta);
                     return true;
                 }
                 if (_form.MaxScroll(_form.Height) < 1)
