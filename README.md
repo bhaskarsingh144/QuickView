@@ -50,7 +50,7 @@ Open from the left-edge chevron (hover or click):
 
 | Section | What you get |
 | --- | --- |
-| **Display** | Per-monitor brightness (DDC/CI and WMI); hover slider and scroll wheel ±1% |
+| **Display** | Per-monitor brightness (DDC/CI and WMI); hover slider and scroll wheel ±1% (drawer fades nearly clear while scrolling so you can judge the screen) |
 | **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ and slider (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
 | **Sound** | Volume slider and mute; hover slider and scroll wheel ±1% |
 | **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute |

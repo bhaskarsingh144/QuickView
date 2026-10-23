@@ -51,5 +51,10 @@ Run-Suite "SliderWheelTests" @(
     (Join-Path $testsDir "SliderWheelTests.cs")
 ) "SliderWheelTests.exe"
 
+Run-Suite "OpacityFadeTests" @(
+    (Join-Path $srcDir "OpacityFade.cs"),
+    (Join-Path $testsDir "OpacityFadeTests.cs")
+) "OpacityFadeTests.exe"
+
 Write-Host "All test suites passed." -ForegroundColor Green
 exit 0
