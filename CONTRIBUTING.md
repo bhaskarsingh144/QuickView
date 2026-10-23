@@ -77,7 +77,7 @@ Automated (no NuGet):
 .\scripts\test.ps1
 ```
 
-This compiles and runs the TextScale unit tests under `tests/` (Accessibility Text size snap, slider mapping, A±, tile wrap).
+This compiles and runs unit tests under `tests/` (TextScale, SliderWheel, etc.).
 
 Before submitting a pull request:
 1. Build successfully (`.\scripts\build.ps1`)
