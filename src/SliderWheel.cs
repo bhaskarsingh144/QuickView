@@ -31,4 +31,17 @@ internal static class SliderWheel
         if (next > 1f) next = 1f;
         return next;
     }
+
+    /// <summary>
+    /// Map a Y position on a vertical track to volume 0–1 (bottom = 0, top = 1).
+    /// </summary>
+    public static float VolumeFromVerticalY(int y, int trackTop, int trackHeight)
+    {
+        if (trackHeight < 1)
+            return 0f;
+        float t = (trackTop + trackHeight - y) / (float)trackHeight;
+        if (t < 0f) t = 0f;
+        if (t > 1f) t = 1f;
+        return t;
+    }
 }

@@ -7,7 +7,10 @@ using System;
 internal static class OpacityFade
 {
     public const double Normal = 0.98;
-    public const double Preview = 0.08;
+    /// <summary>Main panel resting opacity (PanelForm).</summary>
+    public const double PanelNormal = 0.94;
+    // ~30% less dim than the original 0.08 preview (more of the UI stays readable).
+    public const double Preview = 0.35;
     public const int IdleMs = 650;
     public const int FadeOutMs = 160;
     public const int FadeInMs = 280;

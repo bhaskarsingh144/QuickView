@@ -1,9 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 internal sealed class QuickSettingsPopup : Form
@@ -16,29 +14,19 @@ internal sealed class QuickSettingsPopup : Form
     private static readonly Color Accent = UiTheme.Accent;
 
     private readonly AudioControl _audio;
-    private readonly BrightnessControl _brightness;
     private readonly QuickActions _quick = new QuickActions();
     private readonly Font _fontLabel;
     private readonly Font _fontValue;
     private readonly Font _fontTitle;
     private readonly System.Windows.Forms.Timer _poll;
-    private readonly System.Windows.Forms.Timer _fade;
     private float _dpi;
     private float _fit;
     private QuickHit _hover = QuickHit.None;
     private DateTime _lastPoll = DateTime.MinValue;
-    private double _fadeFrom = OpacityFade.Normal;
-    private double _fadeTo = OpacityFade.Normal;
-    private DateTime _fadeStartedUtc = DateTime.MinValue;
-    private int _fadeDurationMs;
-    private bool _fadeRunning;
-    private DateTime _dimIdleUntil = DateTime.MinValue;
-    private bool _brightnessPreview;
 
-    public QuickSettingsPopup(AudioControl audio, BrightnessControl brightness, float dpi, float fit)
+    public QuickSettingsPopup(AudioControl audio, float dpi, float fit)
     {
         _audio = audio;
-        _brightness = brightness;
         _dpi = dpi < 96f ? 96f : dpi;
         _fit = fit < 0.62f ? 0.62f : fit;
         FormBorderStyle = FormBorderStyle.None;
@@ -58,9 +46,6 @@ internal sealed class QuickSettingsPopup : Form
         _poll = new System.Windows.Forms.Timer();
         _poll.Interval = 120;
         _poll.Tick += PollTick;
-        _fade = new System.Windows.Forms.Timer();
-        _fade.Interval = 16;
-        _fade.Tick += FadeTick;
         KeyPreview = true;
         ApplyLayoutSize();
     }
@@ -90,9 +75,8 @@ internal sealed class QuickSettingsPopup : Form
     public void ShowBesidePanel(Rectangle panelScreen)
     {
         _audio.Refresh();
-        _brightness.Refresh();
         RefreshState(true);
-        ResetOpacityImmediate();
+        Opacity = OpacityFade.Normal;
         ApplyLayoutSize();
         PlaceBesidePanel(panelScreen);
         if (!Visible)
@@ -142,10 +126,7 @@ internal sealed class QuickSettingsPopup : Form
     public void HidePopup()
     {
         _poll.Stop();
-        ResetOpacityImmediate();
-        _quick.DragVolume = false;
-        _quick.DragText = false;
-        _quick.DragBrightIndex = -1;
+        Opacity = OpacityFade.Normal;
         _quick.Armed = QuickArm.None;
         if (Visible)
             Hide();
@@ -154,7 +135,6 @@ internal sealed class QuickSettingsPopup : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _poll.Stop();
-        _fade.Stop();
         _fontLabel.Dispose();
         _fontValue.Dispose();
         _fontTitle.Dispose();
@@ -174,8 +154,6 @@ internal sealed class QuickSettingsPopup : Form
 
     private void PollTick(object sender, EventArgs e)
     {
-        if (_quick.DragVolume || _quick.DragText || _quick.DragBrightIndex >= 0)
-            return;
         if ((DateTime.UtcNow - _lastPoll).TotalMilliseconds < 450)
             return;
         RefreshState(false);
@@ -216,12 +194,8 @@ internal sealed class QuickSettingsPopup : Form
         int pad = Px(16);
         int w = Px(320);
         int y = pad;
-        int n = ControllableMonitorCount();
-        if (n < 1) n = 1;
-        // Brightness blocks; text (label + slider + Apply); volume; actions
-        y += n * (ControlBlockH() + BlockGap());
-        y += ControlBlockH() + Px(8) + Px(32) + BlockGap();
-        y += ControlBlockH() + BlockGap();
+        // Text size: label + A± row + Apply
+        y += Px(22) + Px(8) + Px(32) + Px(8) + Px(32) + BlockGap();
         y += SectionHeadH() + Px(8);
         int gap = Px(8);
         int innerW = w - pad * 2;
@@ -241,22 +215,6 @@ internal sealed class QuickSettingsPopup : Form
     private int BlockGap()
     {
         return Px(16);
-    }
-
-    private int ControlBlockH()
-    {
-        return Px(22) + Px(8) + Px(32);
-    }
-
-    private int ControllableMonitorCount()
-    {
-        int n = 0;
-        for (int i = 0; i < _brightness.Items.Count; i++)
-        {
-            if (_brightness.Items[i].Controllable)
-                n++;
-        }
-        return n;
     }
 
     private void ApplyRegion()
@@ -294,39 +252,14 @@ internal sealed class QuickSettingsPopup : Form
         int inner = Width - pad * 2;
         int y = pad;
         int gap = Px(8);
-        int trackH = Px(7);
         int side = Px(32);
 
-        bool anyBright = false;
-        for (int i = 0; i < _brightness.Items.Count; i++)
-        {
-            BrightnessMonitor m = _brightness.Items[i];
-            if (!m.Controllable)
-                continue;
-            anyBright = true;
-            string title = ControllableMonitorCount() > 1 ? FormatMonitorLabel(m.Name) : "Brightness";
-            y = DrawLabelRow(g, x, y, inner, title, m.Percent + "%");
-            Rectangle track = new Rectangle(x, y + (side - trackH) / 2, inner, trackH);
-            Rectangle thumb;
-            QuickActions.DrawSlider(g, track, m.Percent / 100f, Track, Accent, out thumb);
-            _quick.BrightTracks.Add(track);
-            _quick.BrightThumbs.Add(thumb);
-            _quick.BrightIds.Add(m.Id);
-            y += side + BlockGap();
-        }
-        if (!anyBright)
-        {
-            y = DrawLabelRow(g, x, y, inner, "Brightness", "—");
-            using (SolidBrush brush = new SolidBrush(TextMuted))
-                g.DrawString("Not available", _fontLabel, brush, x, y + 6);
-            y += side + BlockGap();
-        }
-
-        // Text: label, A− · slider · A+, then Apply (Settings > Accessibility > Text size)
+        // Text size: A− · A+ · Apply (Settings > Accessibility > Text size)
         string textValue = _quick.TextPercent + "%" + (_quick.TextDirty ? " *" : "");
         y = DrawLabelRow(g, x, y, inner, "Text size", textValue);
-        _quick.TextMinusRect = new Rectangle(x, y, side, side);
-        _quick.TextPlusRect = new Rectangle(x + inner - side, y, side, side);
+        int half = (inner - gap) / 2;
+        _quick.TextMinusRect = new Rectangle(x, y, half, side);
+        _quick.TextPlusRect = new Rectangle(x + half + gap, y, inner - half - gap, side);
         FillRound(g, _quick.TextMinusRect, Px(8), _hover == QuickHit.TextMinus ? UiTheme.Hover : Track);
         FillRound(g, _quick.TextPlusRect, Px(8), _hover == QuickHit.TextPlus ? UiTheme.Hover : Track);
         using (SolidBrush brush = new SolidBrush(TextMain))
@@ -335,12 +268,6 @@ internal sealed class QuickSettingsPopup : Form
             g.DrawString("A−", _fontLabel, brush, _quick.TextMinusRect, fmt);
             g.DrawString("A+", _fontLabel, brush, _quick.TextPlusRect, fmt);
         }
-        _quick.TextTrack = new Rectangle(_quick.TextMinusRect.Right + gap, y + (side - trackH) / 2,
-            Math.Max(Px(48), _quick.TextPlusRect.Left - gap - (_quick.TextMinusRect.Right + gap)), trackH);
-        float tScale = TextScale.SliderFromPercent(_quick.TextPercent);
-        Rectangle textThumb;
-        QuickActions.DrawSlider(g, _quick.TextTrack, tScale, Track, Accent, out textThumb);
-        _quick.TextThumb = textThumb;
         y += side + gap;
         int applyH = side;
         _quick.TextApplyRect = new Rectangle(x, y, inner, applyH);
@@ -354,32 +281,6 @@ internal sealed class QuickSettingsPopup : Form
         using (StringFormat fmt = CenterFormat())
             g.DrawString("Apply", _fontLabel, brush, _quick.TextApplyRect, fmt);
         y += applyH + BlockGap();
-
-        // Volume: label row, then mute · slider
-        int volPct = (int)Math.Round(_quick.Volume01 * 100f);
-        string volValue = !_audio.Available ? "—" : (_quick.Muted ? "Muted" : volPct + "%");
-        y = DrawLabelRow(g, x, y, inner, "Volume", volValue);
-        _quick.MuteRect = new Rectangle(x, y, side, side);
-        FillRound(g, _quick.MuteRect, Px(8), _hover == QuickHit.Mute ? UiTheme.Hover : Track);
-        QuickActions.GlyphSpeaker(g,
-            new Rectangle(_quick.MuteRect.X + 6, _quick.MuteRect.Y + 6, side - 12, side - 12),
-            TextMain, _quick.Muted);
-        if (_audio.Available)
-        {
-            Rectangle volTrack = new Rectangle(_quick.MuteRect.Right + gap, y + (side - trackH) / 2,
-                Math.Max(Px(48), x + inner - (_quick.MuteRect.Right + gap)), trackH);
-            Rectangle thumb;
-            QuickActions.DrawSlider(g, volTrack, _quick.Volume01, Track, Accent, out thumb);
-            _quick.VolumeTrack = volTrack;
-            _quick.VolumeThumb = thumb;
-        }
-        else
-        {
-            using (SolidBrush brush = new SolidBrush(TextMuted))
-                g.DrawString(string.IsNullOrEmpty(_audio.Status) ? "No device" : _audio.Status, _fontLabel, brush,
-                    _quick.MuteRect.Right + gap, y + 6);
-        }
-        y += side + BlockGap();
 
         y = DrawSectionHead(g, "Actions", x, y, inner);
         int cell = Math.Min(Px(92), (inner - gap * 2) / 3);
@@ -455,20 +356,6 @@ internal sealed class QuickSettingsPopup : Form
         return y + h + Px(8);
     }
 
-    private static string FormatMonitorLabel(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-            return "Display";
-        string n = name.Trim();
-        if (n.StartsWith("Generic PnP ", StringComparison.OrdinalIgnoreCase))
-            return "Built-in / default";
-        if (string.Equals(n, "Generic PnP Monitor", StringComparison.OrdinalIgnoreCase))
-            return "Built-in / default";
-        if (n.Length > 28)
-            return n.Substring(0, 26) + "…";
-        return n;
-    }
-
     private void DrawMuteGridTile(Graphics g, Rectangle rect, string label, bool hover)
     {
         Color back = hover ? Color.FromArgb(255, 54, 58, 66) : Track;
@@ -537,69 +424,17 @@ internal sealed class QuickSettingsPopup : Form
         return path;
     }
 
-    protected override void OnMouseDown(MouseEventArgs e)
-    {
-        base.OnMouseDown(e);
-        if (e.Button != MouseButtons.Left)
-            return;
-        Point p = e.Location;
-        if (_quick.TextTrack.Contains(p) || _quick.TextThumb.Contains(p))
-        {
-            _quick.DragText = true;
-            Capture = true;
-            ApplyTextScaleAt(p.X);
-            return;
-        }
-        if (_quick.VolumeTrack.Contains(p) || _quick.VolumeThumb.Contains(p))
-        {
-            _quick.DragVolume = true;
-            Capture = true;
-            ApplyVolumeAt(p.X);
-            return;
-        }
-        int bi = _quick.BrightnessIndexAt(p);
-        if (bi >= 0)
-        {
-            _quick.DragBrightIndex = bi;
-            Capture = true;
-            ApplyBrightnessAt(bi, p.X);
-        }
-    }
-
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
         if (e.Button != MouseButtons.Left)
             return;
-        if (_quick.DragVolume || _quick.DragText || _quick.DragBrightIndex >= 0)
-        {
-            _quick.DragVolume = false;
-            _quick.DragText = false;
-            _quick.DragBrightIndex = -1;
-            Capture = false;
-            return;
-        }
         HandleClick(e.Location);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (_quick.DragText)
-        {
-            ApplyTextScaleAt(e.X);
-            return;
-        }
-        if (_quick.DragVolume)
-        {
-            ApplyVolumeAt(e.X);
-            return;
-        }
-        if (_quick.DragBrightIndex >= 0)
-        {
-            ApplyBrightnessAt(_quick.DragBrightIndex, e.X);
-            return;
-        }
         QuickHit prev = _hover;
         _hover = _quick.HitTest(e.Location);
         Cursor = _hover != QuickHit.None ? Cursors.Hand : Cursors.Default;
@@ -615,153 +450,6 @@ internal sealed class QuickSettingsPopup : Form
             _hover = QuickHit.None;
             Invalidate();
         }
-    }
-
-    protected override void OnMouseEnter(EventArgs e)
-    {
-        base.OnMouseEnter(e);
-        // Needed so the popup receives WM_MOUSEWHEEL while the pointer is over it.
-        if (!ContainsFocus)
-            Focus();
-    }
-
-    protected override void OnMouseWheel(MouseEventArgs e)
-    {
-        base.OnMouseWheel(e);
-        Point p = e.Location;
-        if (_quick.VolumeTrack.Contains(p) || _quick.VolumeThumb.Contains(p))
-        {
-            NudgeVolume(e.Delta);
-            MarkWheelHandled(e);
-            return;
-        }
-        int bi = _quick.BrightnessIndexAt(p);
-        if (bi >= 0)
-        {
-            NudgeBrightness(bi, e.Delta);
-            MarkWheelHandled(e);
-        }
-    }
-
-    private static void MarkWheelHandled(MouseEventArgs e)
-    {
-        HandledMouseEventArgs he = e as HandledMouseEventArgs;
-        if (he != null)
-            he.Handled = true;
-    }
-
-    private void NudgeVolume(int wheelDelta)
-    {
-        if (!_audio.Available)
-            return;
-        float next = SliderWheel.AdjustVolume01(_quick.Volume01, wheelDelta);
-        if (_audio.TrySetVolume(next))
-        {
-            _quick.Volume01 = next;
-            if (next > 0.001f && _quick.Muted)
-            {
-                _audio.TrySetMute(false);
-                _quick.Muted = false;
-            }
-            _quick.StatusLine = "";
-        }
-        else
-            _quick.StatusLine = _audio.Status;
-        Invalidate();
-    }
-
-    private void NudgeBrightness(int index, int wheelDelta)
-    {
-        if (index < 0 || index >= _quick.BrightIds.Count)
-            return;
-        string id = _quick.BrightIds[index];
-        int current = 0;
-        for (int i = 0; i < _brightness.Items.Count; i++)
-        {
-            if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
-            {
-                current = _brightness.Items[i].Percent;
-                break;
-            }
-        }
-        int next = SliderWheel.AdjustBrightness(current, wheelDelta);
-        if (_brightness.TrySet(id, next))
-        {
-            for (int i = 0; i < _brightness.Items.Count; i++)
-            {
-                if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
-                    _brightness.Items[i].Percent = next;
-            }
-            _quick.StatusLine = "";
-            BeginBrightnessPreview();
-        }
-        else
-            _quick.StatusLine = "Brightness set failed";
-        Invalidate();
-    }
-
-    private void BeginBrightnessPreview()
-    {
-        _brightnessPreview = true;
-        _dimIdleUntil = OpacityFade.IdleDeadline(DateTime.UtcNow);
-        if (Math.Abs(Opacity - OpacityFade.Preview) < 0.02 && !_fadeRunning)
-            return;
-        StartFade(Opacity, OpacityFade.Preview, OpacityFade.FadeOutMs);
-    }
-
-    private void StartFade(double from, double to, int durationMs)
-    {
-        _fadeFrom = from;
-        _fadeTo = to;
-        _fadeDurationMs = durationMs < 1 ? 1 : durationMs;
-        _fadeStartedUtc = DateTime.UtcNow;
-        _fadeRunning = true;
-        if (!_fade.Enabled)
-            _fade.Start();
-    }
-
-    private void FadeTick(object sender, EventArgs e)
-    {
-        DateTime now = DateTime.UtcNow;
-        if (_fadeRunning)
-        {
-            int elapsed = (int)(now - _fadeStartedUtc).TotalMilliseconds;
-            Opacity = OpacityFade.OpacityAt(_fadeFrom, _fadeTo, elapsed, _fadeDurationMs);
-            if (OpacityFade.FadeComplete(elapsed, _fadeDurationMs))
-            {
-                Opacity = _fadeTo;
-                _fadeRunning = false;
-            }
-            return;
-        }
-
-        if (_brightnessPreview && OpacityFade.IdleElapsed(now, _dimIdleUntil))
-        {
-            _brightnessPreview = false;
-            StartFade(Opacity, OpacityFade.Normal, OpacityFade.FadeInMs);
-            return;
-        }
-
-        if (!_brightnessPreview && !_fadeRunning && Math.Abs(Opacity - OpacityFade.Normal) < 0.01)
-            _fade.Stop();
-    }
-
-    private void ResetOpacityImmediate()
-    {
-        _fade.Stop();
-        _fadeRunning = false;
-        _brightnessPreview = false;
-        _dimIdleUntil = DateTime.MinValue;
-        Opacity = OpacityFade.Normal;
-    }
-
-    private void ApplyTextScaleAt(int x)
-    {
-        if (_quick.TextTrack.Width < 1)
-            return;
-        float t = (x - _quick.TextTrack.X) / (float)_quick.TextTrack.Width;
-        int percent = TextScale.ClampAndSnap(TextScale.PercentFromSlider(t));
-        SetTextPending(percent);
     }
 
     private void SetTextPending(int percent)
@@ -789,54 +477,6 @@ internal sealed class QuickSettingsPopup : Form
         Invalidate();
     }
 
-    private void ApplyVolumeAt(int x)
-    {
-        if (_quick.VolumeTrack.Width < 1 || !_audio.Available)
-            return;
-        float v = (x - _quick.VolumeTrack.X) / (float)_quick.VolumeTrack.Width;
-        if (v < 0f) v = 0f;
-        if (v > 1f) v = 1f;
-        if (_audio.TrySetVolume(v))
-        {
-            _quick.Volume01 = v;
-            if (v > 0.001f && _quick.Muted)
-            {
-                _audio.TrySetMute(false);
-                _quick.Muted = false;
-            }
-            _quick.StatusLine = "";
-        }
-        else
-            _quick.StatusLine = _audio.Status;
-        Invalidate();
-    }
-
-    private void ApplyBrightnessAt(int index, int x)
-    {
-        if (index < 0 || index >= _quick.BrightTracks.Count)
-            return;
-        Rectangle track = _quick.BrightTracks[index];
-        if (track.Width < 1)
-            return;
-        float v = (x - track.X) / (float)track.Width;
-        if (v < 0f) v = 0f;
-        if (v > 1f) v = 1f;
-        int pct = (int)Math.Round(v * 100f);
-        string id = _quick.BrightIds[index];
-        if (_brightness.TrySet(id, pct))
-        {
-            for (int i = 0; i < _brightness.Items.Count; i++)
-            {
-                if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
-                    _brightness.Items[i].Percent = pct;
-            }
-            _quick.StatusLine = "";
-        }
-        else
-            _quick.StatusLine = "Brightness set failed";
-        Invalidate();
-    }
-
     private void HandleClick(Point p)
     {
         QuickHit hit = _quick.HitTest(p);
@@ -856,7 +496,7 @@ internal sealed class QuickSettingsPopup : Form
             CommitTextScale();
             return;
         }
-        if (hit == QuickHit.Mute || hit == QuickHit.TileMute)
+        if (hit == QuickHit.TileMute)
         {
             bool next = !_quick.Muted;
             if (_audio.TrySetMute(next))
