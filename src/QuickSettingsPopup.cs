@@ -22,10 +22,18 @@ internal sealed class QuickSettingsPopup : Form
     private readonly Font _fontValue;
     private readonly Font _fontTitle;
     private readonly System.Windows.Forms.Timer _poll;
+    private readonly System.Windows.Forms.Timer _fade;
     private float _dpi;
     private float _fit;
     private QuickHit _hover = QuickHit.None;
     private DateTime _lastPoll = DateTime.MinValue;
+    private double _fadeFrom = OpacityFade.Normal;
+    private double _fadeTo = OpacityFade.Normal;
+    private DateTime _fadeStartedUtc = DateTime.MinValue;
+    private int _fadeDurationMs;
+    private bool _fadeRunning;
+    private DateTime _dimIdleUntil = DateTime.MinValue;
+    private bool _brightnessPreview;
 
     public QuickSettingsPopup(AudioControl audio, BrightnessControl brightness, float dpi, float fit)
     {
@@ -39,7 +47,7 @@ internal sealed class QuickSettingsPopup : Form
         TopMost = true;
         BackColor = Fill;
         // Near-opaque — translucent layers make thin text look soft/blurry.
-        Opacity = 0.98;
+        Opacity = OpacityFade.Normal;
         DoubleBuffered = true;
         Text = "Quick settings";
         AutoScaleMode = AutoScaleMode.None;
@@ -50,6 +58,9 @@ internal sealed class QuickSettingsPopup : Form
         _poll = new System.Windows.Forms.Timer();
         _poll.Interval = 120;
         _poll.Tick += PollTick;
+        _fade = new System.Windows.Forms.Timer();
+        _fade.Interval = 16;
+        _fade.Tick += FadeTick;
         KeyPreview = true;
         ApplyLayoutSize();
     }
@@ -81,6 +92,7 @@ internal sealed class QuickSettingsPopup : Form
         _audio.Refresh();
         _brightness.Refresh();
         RefreshState(true);
+        ResetOpacityImmediate();
         ApplyLayoutSize();
         PlaceBesidePanel(panelScreen);
         if (!Visible)
@@ -130,6 +142,7 @@ internal sealed class QuickSettingsPopup : Form
     public void HidePopup()
     {
         _poll.Stop();
+        ResetOpacityImmediate();
         _quick.DragVolume = false;
         _quick.DragText = false;
         _quick.DragBrightIndex = -1;
@@ -141,6 +154,7 @@ internal sealed class QuickSettingsPopup : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _poll.Stop();
+        _fade.Stop();
         _fontLabel.Dispose();
         _fontValue.Dispose();
         _fontTitle.Dispose();
@@ -601,6 +615,144 @@ internal sealed class QuickSettingsPopup : Form
             _hover = QuickHit.None;
             Invalidate();
         }
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        // Needed so the popup receives WM_MOUSEWHEEL while the pointer is over it.
+        if (!ContainsFocus)
+            Focus();
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        Point p = e.Location;
+        if (_quick.VolumeTrack.Contains(p) || _quick.VolumeThumb.Contains(p))
+        {
+            NudgeVolume(e.Delta);
+            MarkWheelHandled(e);
+            return;
+        }
+        int bi = _quick.BrightnessIndexAt(p);
+        if (bi >= 0)
+        {
+            NudgeBrightness(bi, e.Delta);
+            MarkWheelHandled(e);
+        }
+    }
+
+    private static void MarkWheelHandled(MouseEventArgs e)
+    {
+        HandledMouseEventArgs he = e as HandledMouseEventArgs;
+        if (he != null)
+            he.Handled = true;
+    }
+
+    private void NudgeVolume(int wheelDelta)
+    {
+        if (!_audio.Available)
+            return;
+        float next = SliderWheel.AdjustVolume01(_quick.Volume01, wheelDelta);
+        if (_audio.TrySetVolume(next))
+        {
+            _quick.Volume01 = next;
+            if (next > 0.001f && _quick.Muted)
+            {
+                _audio.TrySetMute(false);
+                _quick.Muted = false;
+            }
+            _quick.StatusLine = "";
+        }
+        else
+            _quick.StatusLine = _audio.Status;
+        Invalidate();
+    }
+
+    private void NudgeBrightness(int index, int wheelDelta)
+    {
+        if (index < 0 || index >= _quick.BrightIds.Count)
+            return;
+        string id = _quick.BrightIds[index];
+        int current = 0;
+        for (int i = 0; i < _brightness.Items.Count; i++)
+        {
+            if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
+            {
+                current = _brightness.Items[i].Percent;
+                break;
+            }
+        }
+        int next = SliderWheel.AdjustBrightness(current, wheelDelta);
+        if (_brightness.TrySet(id, next))
+        {
+            for (int i = 0; i < _brightness.Items.Count; i++)
+            {
+                if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
+                    _brightness.Items[i].Percent = next;
+            }
+            _quick.StatusLine = "";
+            BeginBrightnessPreview();
+        }
+        else
+            _quick.StatusLine = "Brightness set failed";
+        Invalidate();
+    }
+
+    private void BeginBrightnessPreview()
+    {
+        _brightnessPreview = true;
+        _dimIdleUntil = OpacityFade.IdleDeadline(DateTime.UtcNow);
+        if (Math.Abs(Opacity - OpacityFade.Preview) < 0.02 && !_fadeRunning)
+            return;
+        StartFade(Opacity, OpacityFade.Preview, OpacityFade.FadeOutMs);
+    }
+
+    private void StartFade(double from, double to, int durationMs)
+    {
+        _fadeFrom = from;
+        _fadeTo = to;
+        _fadeDurationMs = durationMs < 1 ? 1 : durationMs;
+        _fadeStartedUtc = DateTime.UtcNow;
+        _fadeRunning = true;
+        if (!_fade.Enabled)
+            _fade.Start();
+    }
+
+    private void FadeTick(object sender, EventArgs e)
+    {
+        DateTime now = DateTime.UtcNow;
+        if (_fadeRunning)
+        {
+            int elapsed = (int)(now - _fadeStartedUtc).TotalMilliseconds;
+            Opacity = OpacityFade.OpacityAt(_fadeFrom, _fadeTo, elapsed, _fadeDurationMs);
+            if (OpacityFade.FadeComplete(elapsed, _fadeDurationMs))
+            {
+                Opacity = _fadeTo;
+                _fadeRunning = false;
+            }
+            return;
+        }
+
+        if (_brightnessPreview && OpacityFade.IdleElapsed(now, _dimIdleUntil))
+        {
+            _brightnessPreview = false;
+            StartFade(Opacity, OpacityFade.Normal, OpacityFade.FadeInMs);
+            return;
+        }
+
+        if (!_brightnessPreview && !_fadeRunning && Math.Abs(Opacity - OpacityFade.Normal) < 0.01)
+            _fade.Stop();
+    }
+
+    private void ResetOpacityImmediate()
+    {
+        _fade.Stop();
+        _fadeRunning = false;
+        _brightnessPreview = false;
+        _dimIdleUntil = DateTime.MinValue;
+        Opacity = OpacityFade.Normal;
     }
 
     private void ApplyTextScaleAt(int x)
