@@ -603,6 +603,88 @@ internal sealed class QuickSettingsPopup : Form
         }
     }
 
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        // Needed so the popup receives WM_MOUSEWHEEL while the pointer is over it.
+        if (!ContainsFocus)
+            Focus();
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        Point p = e.Location;
+        if (_quick.VolumeTrack.Contains(p) || _quick.VolumeThumb.Contains(p))
+        {
+            NudgeVolume(e.Delta);
+            MarkWheelHandled(e);
+            return;
+        }
+        int bi = _quick.BrightnessIndexAt(p);
+        if (bi >= 0)
+        {
+            NudgeBrightness(bi, e.Delta);
+            MarkWheelHandled(e);
+        }
+    }
+
+    private static void MarkWheelHandled(MouseEventArgs e)
+    {
+        HandledMouseEventArgs he = e as HandledMouseEventArgs;
+        if (he != null)
+            he.Handled = true;
+    }
+
+    private void NudgeVolume(int wheelDelta)
+    {
+        if (!_audio.Available)
+            return;
+        float next = SliderWheel.AdjustVolume01(_quick.Volume01, wheelDelta);
+        if (_audio.TrySetVolume(next))
+        {
+            _quick.Volume01 = next;
+            if (next > 0.001f && _quick.Muted)
+            {
+                _audio.TrySetMute(false);
+                _quick.Muted = false;
+            }
+            _quick.StatusLine = "";
+        }
+        else
+            _quick.StatusLine = _audio.Status;
+        Invalidate();
+    }
+
+    private void NudgeBrightness(int index, int wheelDelta)
+    {
+        if (index < 0 || index >= _quick.BrightIds.Count)
+            return;
+        string id = _quick.BrightIds[index];
+        int current = 0;
+        for (int i = 0; i < _brightness.Items.Count; i++)
+        {
+            if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
+            {
+                current = _brightness.Items[i].Percent;
+                break;
+            }
+        }
+        int next = SliderWheel.AdjustBrightness(current, wheelDelta);
+        if (_brightness.TrySet(id, next))
+        {
+            for (int i = 0; i < _brightness.Items.Count; i++)
+            {
+                if (string.Equals(_brightness.Items[i].Id, id, StringComparison.Ordinal))
+                    _brightness.Items[i].Percent = next;
+            }
+            _quick.StatusLine = "";
+        }
+        else
+            _quick.StatusLine = "Brightness set failed";
+        Invalidate();
+    }
+
     private void ApplyTextScaleAt(int x)
     {
         if (_quick.TextTrack.Width < 1)

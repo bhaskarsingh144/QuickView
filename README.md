@@ -50,9 +50,9 @@ Open from the left-edge chevron (hover or click):
 
 | Section | What you get |
 | --- | --- |
-| **Display** | Per-monitor brightness (DDC/CI and WMI) |
+| **Display** | Per-monitor brightness (DDC/CI and WMI); hover slider and scroll wheel ±1% |
 | **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ and slider (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
-| **Sound** | Volume slider and mute |
+| **Sound** | Volume slider and mute; hover slider and scroll wheel ±1% |
 | **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute |
 
 Restart and Shut down require a second confirm within two seconds.
@@ -98,7 +98,7 @@ Output: `bin\QuickView.exe`
 .\scripts\test.ps1
 ```
 
-Runs dedicated Accessibility Text size unit tests (snap, slider mapping, A± / tile wrap). Manual UI matrix: [docs/TEST-TextScale.md](docs/TEST-TextScale.md).
+Runs unit tests (TextScale + SliderWheel). Manual matrices: [docs/TEST-TextScale.md](docs/TEST-TextScale.md), [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md).
 
 ---
 
