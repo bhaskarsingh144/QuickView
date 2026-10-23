@@ -21,14 +21,16 @@ internal sealed class QuickSettingsPopup : Form
     private readonly System.Windows.Forms.Timer _poll;
     private float _dpi;
     private float _fit;
+    private float _textFit;
     private QuickHit _hover = QuickHit.None;
     private DateTime _lastPoll = DateTime.MinValue;
 
-    public QuickSettingsPopup(AudioControl audio, float dpi, float fit)
+    public QuickSettingsPopup(AudioControl audio, float dpi, float fit, float textFit)
     {
         _audio = audio;
         _dpi = dpi < 96f ? 96f : dpi;
         _fit = fit < 0.62f ? 0.62f : fit;
+        _textFit = textFit < 0.8f ? 0.8f : textFit;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         ShowInTaskbar = false;
@@ -40,9 +42,10 @@ internal sealed class QuickSettingsPopup : Form
         Text = "Quick settings";
         AutoScaleMode = AutoScaleMode.None;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
-        _fontLabel = new Font("Segoe UI", 10f * _fit, FontStyle.Regular, GraphicsUnit.Point);
-        _fontValue = new Font("Segoe UI", 10.5f * _fit, FontStyle.Regular, GraphicsUnit.Point);
-        _fontTitle = new Font("Segoe UI", 11f * _fit, FontStyle.Regular, GraphicsUnit.Point);
+        float text = FontEm();
+        _fontLabel = new Font("Segoe UI", 10f * text, FontStyle.Regular, GraphicsUnit.Point);
+        _fontValue = new Font("Segoe UI", 10.5f * text, FontStyle.Regular, GraphicsUnit.Point);
+        _fontTitle = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
         _poll = new System.Windows.Forms.Timer();
         _poll.Interval = 120;
         _poll.Tick += PollTick;
@@ -182,6 +185,14 @@ internal sealed class QuickSettingsPopup : Form
             _quick.TextDirty = false;
         }
         _quick.ClearArmIfExpired();
+    }
+
+    private float FontEm()
+    {
+        float t = _fit * _textFit;
+        if (t < 0.55f)
+            t = 0.55f;
+        return t;
     }
 
     private int Px(int dip)
@@ -358,27 +369,11 @@ internal sealed class QuickSettingsPopup : Form
 
     private void DrawMuteGridTile(Graphics g, Rectangle rect, string label, bool hover)
     {
-        Color back = hover ? Color.FromArgb(255, 54, 58, 66) : Track;
-        int rad = Math.Max(5, rect.Height / 10);
-        using (GraphicsPath path = Round(rect, rad))
-        using (SolidBrush brush = new SolidBrush(back))
-            g.FillPath(brush, path);
-        if (hover)
-        {
-            using (Pen pen = new Pen(Line, 1.3f))
-            using (GraphicsPath path = Round(rect, rad))
-                g.DrawPath(pen, path);
-        }
-        Color ink = hover ? TextMain : Color.FromArgb(255, 210, 214, 222);
-        int icon = Math.Max(26, Math.Min(34, rect.Height * 2 / 5));
-        int iconX = rect.X + (rect.Width - icon) / 2;
-        int iconY = rect.Y + Math.Max(10, (rect.Height / 2 - icon) / 2 + 2);
-        QuickActions.GlyphSpeaker(g, new Rectangle(iconX, iconY, icon, icon), ink, _quick.Muted);
-        int textTop = iconY + icon + 4;
-        Rectangle textRect = new Rectangle(rect.X + 3, textTop, rect.Width - 6, rect.Bottom - textTop - 4);
-        using (SolidBrush brush = new SolidBrush(ink))
-        using (StringFormat fmt = CenterFormat())
-            g.DrawString(label, _fontValue, brush, textRect, fmt);
+        QuickActions.DrawGridTile(g, rect, label, _fontValue, hover, false, Track, Line, TextMain, TextMuted,
+            delegate(Graphics gg, Rectangle r, Color ink)
+            {
+                QuickActions.GlyphSpeaker(gg, r, ink, _quick.Muted);
+            });
     }
 
     private void AssignTile(QuickHit hit, Rectangle r)

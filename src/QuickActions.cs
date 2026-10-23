@@ -183,14 +183,31 @@ internal sealed class QuickActions
                 g.DrawPath(pen, path);
         }
         Color ink = (hover || armed) ? textMain : Color.FromArgb(255, 210, 214, 222);
-        int icon = Math.Max(26, Math.Min(34, rect.Height * 2 / 5));
+        // Reserve a label band first so icons never collide with "Shut down" etc. on compact Fit.
+        int pad = Math.Max(3, rect.Height / 24);
+        int labelH = 0;
+        if (!string.IsNullOrEmpty(label) && font != null)
+        {
+            labelH = (int)Math.Ceiling(font.GetHeight()) + 2;
+            if (labelH < rect.Height / 5)
+                labelH = rect.Height / 5;
+            if (labelH > rect.Height / 3)
+                labelH = rect.Height / 3;
+        }
+        int iconMax = rect.Height - labelH - pad * 3;
+        if (iconMax < 12)
+            iconMax = 12;
+        int icon = Math.Min(iconMax, Math.Max(14, rect.Height * 2 / 5));
+        if (icon > rect.Width - pad * 2)
+            icon = Math.Max(12, rect.Width - pad * 2);
         int iconX = rect.X + (rect.Width - icon) / 2;
-        int iconY = rect.Y + Math.Max(10, (rect.Height / 2 - icon) / 2 + 2);
+        int contentTop = rect.Y + pad;
+        int contentH = rect.Height - labelH - pad * 2;
+        int iconY = contentTop + Math.Max(0, (contentH - icon) / 2);
         glyph(g, new Rectangle(iconX, iconY, icon, icon), ink);
         if (!string.IsNullOrEmpty(label) && font != null)
         {
-            int textTop = iconY + icon + 4;
-            Rectangle textRect = new Rectangle(rect.X + 3, textTop, rect.Width - 6, rect.Bottom - textTop - 4);
+            Rectangle textRect = new Rectangle(rect.X + pad, rect.Bottom - labelH - pad, rect.Width - pad * 2, labelH);
             using (SolidBrush brush = new SolidBrush(ink))
             using (StringFormat fmt = new StringFormat())
             {
