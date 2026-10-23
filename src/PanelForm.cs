@@ -618,8 +618,8 @@ internal sealed class PanelForm : Form
             return y;
         }
         _brightId = mon.Id ?? "";
-        // ~2 cm tall HyperOS-style fill block (no thumb / no label).
-        int blockH = Px(56);
+        // HyperOS-style fill block (~40% shorter than the first Px(56) pass).
+        int blockH = Px(34);
         int gapBelow = Px(10);
         _brightTrack = new Rectangle(x, y, inner, blockH);
         if (g != null)

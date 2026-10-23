@@ -15,7 +15,7 @@ Automated: `.\scripts\test.ps1` (OpacityFade includes `PanelNormal`).
 | ID | Result | Notes |
 |----|--------|-------|
 | A1 Under header | | Between hairline and CPU/Mem/GPU/Disk chips |
-| A2 No label | | Rounded fill block (~2 cm tall), left fill by level, no thumb |
+| A2 No label | | Rounded fill block (~Px(34) tall), left fill by level, no thumb |
 | A3 Chip detail open | | Strip still visible (chrome) |
 | A4 No controllable display | | Strip omitted; no empty gap |
 

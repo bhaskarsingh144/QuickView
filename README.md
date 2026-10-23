@@ -43,7 +43,7 @@ Live CPU, memory, GPU, and disk metrics at a glance — plus a quick settings dr
 - Live **Wi-Fi SSID** (Native WiFi API) with download / upload rates
 - **Battery** percent with charging indicator
 - Click Wi-Fi → Windows network settings · Click battery → power options
-- **Brightness** fill-block under the header (HyperOS-style rounded bar, no label) — drag or scroll ±1%; panel fades clear while scrolling (same preview as the drawer)
+- **Brightness** fill-block under the header (HyperOS-style rounded bar, no label) — drag or scroll ±1%; panel soft-dims while scrolling (same preview as the drawer)
 
 ### Quick settings drawer
 
