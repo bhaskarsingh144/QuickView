@@ -3,16 +3,17 @@ using System.Drawing;
 using System.Management;
 using System.Windows.Forms;
 
-// Layout scale for the primary screen. Remeasured on first start, restart,
+// Layout / text scale for the primary screen. Remeasured on first start, restart,
 // DPI change, and display change.
 //
-// Standard panels covered (physical pixels + common inch classes):
-//   16:10 — 1920x1200 (FHD+ / "1080" 16:10), 2240x1400, 2560x1600,
-//           2880x1800 (2.8K), 3072x1920 (3K), 3840x2400 (4K 16:10)
-//   16:9  — 1366x768, 1600x900, 1920x1080, 2560x1440, 3840x2160 (4K)
-//   Other — 3440x1440 ultrawide, 5120x2160 / 5120x1440 superwide
-// Inch classes: ~13–14" and ~15–16–17" laptops; ~24", ~27–28", ~32" desktops.
-// Logical height still drives the desktop curve so 4K @150% stays full size.
+// Model (PerMonitorV2):
+//   - Layout DIPs:   px = dip * (Dpi/96) * Fit
+//   - Font points:   pt = basePt * Fit * TextFit   (GDI then scales points by Dpi)
+// Fit follows logical height (physical * 96 / Dpi). Laptop/panel floors used to
+// push Fit back up on 15–16" FHD panels even when Windows DPI was already ≥125%,
+// which made Point text feel oversized and cramped in fixed chrome (drawer tiles).
+// TextFit further tightens fonts only on those laptop panels without shrinking
+// the window chrome.
 
 internal struct DisplayProfile
 {
@@ -23,6 +24,7 @@ internal struct DisplayProfile
     public float LogicH;
     public float DiagonalIn;
     public float Fit;
+    public float TextFit;
     public bool SixteenTen;
     public bool Ultrawide;
 }
@@ -45,20 +47,29 @@ internal static class DisplayScale
         p.Ultrawide = IsUltrawide(ratio);
         p.DiagonalIn = ResolveDiagonalInches(bounds, dpi, p.SixteenTen);
         p.Fit = ComputeFit(p);
+        p.TextFit = ComputeTextFit(p);
         return p;
     }
 
     public static float ComputeFit(DisplayProfile p)
     {
         float fit = FitFromLogicalHeight(p.LogicH);
-        float floor = LaptopFloor(p.DiagonalIn, p.SixteenTen);
-        if (floor > 0f && fit < floor)
-            fit = floor;
+        float scale = p.Dpi / 96f;
 
-        // Known physical panels: nudge when Windows scale leaves logical height low.
+        float floor = LaptopFloor(p.DiagonalIn, p.SixteenTen);
         float panel = StandardPanelFloor(p.PhysW, p.PhysH, p.DiagonalIn, p.SixteenTen);
-        if (panel > 0f && fit < panel)
-            fit = panel;
+        float want = Math.Max(floor, panel);
+
+        if (want > 0f && fit < want)
+        {
+            // When Windows scale is already elevated, logical height dropped on purpose.
+            // Do not yank Fit all the way back to the old laptop floor — that is what
+            // made 16" FHD/FHD+ text feel huge while chrome stayed "fine".
+            if (scale >= 1.2f)
+                fit = Math.Min(want, fit + 0.04f);
+            else
+                fit = want;
+        }
 
         if (p.Ultrawide && fit > 0.94f && p.LogicH < 1200f)
             fit = 0.94f;
@@ -68,6 +79,30 @@ internal static class DisplayScale
         if (fit < 0.62f)
             fit = 0.62f;
         return fit;
+    }
+
+    /// <summary>
+    /// Extra multiplier for Point fonts only. Keeps window/chrome size, shrinks type
+    /// on mid-size laptop panels where Segoe/Bahnschrift read large in the drawer.
+    /// </summary>
+    public static float ComputeTextFit(DisplayProfile p)
+    {
+        // 15–17" class with FHD / FHD+ native panels (user's 16" ~1080p / 16:10 case).
+        bool compactLaptop = p.DiagonalIn > 0f && p.DiagonalIn <= 17.5f
+            && p.PhysH > 0 && p.PhysH <= 1200;
+        if (!compactLaptop && p.DiagonalIn <= 0f && p.PhysH >= 1000 && p.PhysH <= 1200
+            && (Near(p.PhysW, 1920) || (p.SixteenTen && p.PhysH >= 1100)))
+            compactLaptop = true; // unknown EDID: still treat FHD-class as laptop
+
+        if (!compactLaptop)
+            return 1f;
+
+        float scale = p.Dpi / 96f;
+        if (scale >= 1.45f)
+            return 0.88f; // 150%+ on a small panel
+        if (scale >= 1.2f)
+            return 0.90f; // 125%
+        return 0.92f;     // 100% on 16" — still slightly tight vs desktop
     }
 
     private static float FitFromLogicalHeight(float h)
@@ -99,12 +134,12 @@ internal static class DisplayScale
     {
         if (diagonalIn <= 0f || diagonalIn > 18.5f)
             return 0f;
-        // Desktops (~24"+) use the logical curve only.
+        // Softer than the previous 0.88/0.84 floors — those fought Windows DPI.
         if (diagonalIn >= 15.0f)
-            return sixteenTen ? 0.88f : 0.84f; // 15–17" class (incl. 16" FHD+ 16:10)
+            return sixteenTen ? 0.80f : 0.76f; // 15–17" class
         if (diagonalIn >= 13.0f)
-            return sixteenTen ? 0.80f : 0.76f; // 13–14" class
-        return sixteenTen ? 0.74f : 0.70f;     // compact
+            return sixteenTen ? 0.76f : 0.72f; // 13–14" class
+        return sixteenTen ? 0.72f : 0.68f;     // compact
     }
 
     // Floors keyed to common native panels when the inch class is known or likely.
@@ -116,27 +151,27 @@ internal static class DisplayScale
         {
             // FHD+ 16:10 — common on 14" and 16" laptops.
             if (diagonalIn > 0f && diagonalIn < 15.0f)
-                return 0.80f;
-            return Laptopish(diagonalIn) ? 0.88f : 0f;
+                return 0.76f;
+            return Laptopish(diagonalIn) ? 0.80f : 0f;
         }
         if (Near(w, 1920) && Near(h, 1080))
         {
             if (diagonalIn > 0f && diagonalIn < 15.0f)
-                return 0.76f;
-            return Laptopish(diagonalIn) ? 0.84f : 0f;
+                return 0.72f;
+            return Laptopish(diagonalIn) ? 0.76f : 0f;
         }
         if (Near(w, 2240) && Near(h, 1400))
-            return 0.82f; // 14" 16:10
+            return 0.80f; // 14" 16:10
         if (Near(w, 2560) && Near(h, 1600))
-            return Laptopish(diagonalIn) ? 0.90f : 0f;
-        if (Near(w, 2560) && Near(h, 1440))
             return Laptopish(diagonalIn) ? 0.88f : 0f;
+        if (Near(w, 2560) && Near(h, 1440))
+            return Laptopish(diagonalIn) ? 0.86f : 0f;
         if (Near(w, 2880) && Near(h, 1800))
-            return Laptopish(diagonalIn) ? 0.90f : 0f; // 2.8K 16:10
+            return Laptopish(diagonalIn) ? 0.88f : 0f; // 2.8K 16:10
         if (Near(w, 3072) && Near(h, 1920))
-            return Laptopish(diagonalIn) ? 0.90f : 0f; // 3K 16:10
+            return Laptopish(diagonalIn) ? 0.88f : 0f; // 3K 16:10
         if (Near(w, 3840) && Near(h, 2400))
-            return Laptopish(diagonalIn) ? 0.92f : 0f; // 4K 16:10 laptop
+            return Laptopish(diagonalIn) ? 0.90f : 0f; // 4K 16:10 laptop
         if (Near(w, 3840) && Near(h, 2160))
             return 0f; // 4K 16:9 — logical curve only (desktop or laptop)
         if (Near(w, 3440) && Near(h, 1440))
@@ -144,12 +179,12 @@ internal static class DisplayScale
         if (Near(w, 1366) && Near(h, 768))
             return 0.62f;
         if (Near(w, 1600) && Near(h, 900))
-            return Laptopish(diagonalIn) ? 0.70f : 0f;
+            return Laptopish(diagonalIn) ? 0.68f : 0f;
         if (sixteenTen && Laptopish(diagonalIn) && h >= 1100 && h <= 1300)
         {
             if (diagonalIn > 0f && diagonalIn < 15.0f)
-                return 0.80f;
-            return 0.86f;
+                return 0.76f;
+            return 0.80f;
         }
         return 0f;
     }
@@ -200,6 +235,7 @@ internal static class DisplayScale
 
     private static float EstimatedDiagonalInches(Rectangle bounds, float dpi)
     {
+        // Approximate only — Windows DPI is a scale factor, not true panel PPI.
         float w = bounds.Width / dpi;
         float h = bounds.Height / dpi;
         return (float)Math.Sqrt(w * w + h * h);
