@@ -19,6 +19,12 @@ internal static class ChromeLayout
     public const int VolWidthInsetDip = 12;
     public const int VolFillMinDip = 28;
     public const int VolBadgeFloorDip = 14;
+    public const int VolMainGapDip = 8;
+    public const int VolMinHeightDip = 40;
+    public const int MainMinWidthDip = 120;
+    public const int BrightBlockDip = 34;
+    public const int BrightGapBelowDip = 10;
+    /// <summary>Minimum width reserved for the drawer hit left of the network cluster.</summary>
     public const int ChevronReserveMinDip = 44;
     public const int HeaderGapDip = 6;
     public const int HeaderMidGapDip = 4;
@@ -188,11 +194,11 @@ internal static class ChromeLayout
     {
         int inner = ContentInnerPx(dpi, fit, gutterPx);
         int volW = Px(VolWidthDip, dpi, fit);
-        int gap = Px(8, dpi, fit);
+        int gap = Px(VolMainGapDip, dpi, fit);
         // Header status uses mainW = inner - vol - gap (volume column sits beside header).
         int mainW = inner - volW - gap;
-        if (mainW < Px(120, dpi, fit))
-            mainW = Px(120, dpi, fit);
+        if (mainW < Px(MainMinWidthDip, dpi, fit))
+            mainW = Px(MainMinWidthDip, dpi, fit);
 
         int netW = EstimateNetworkWidthPx(dpi, fit, textFit);
         int battW = EstimateBatterySlotPx(dpi, fit, textFit);

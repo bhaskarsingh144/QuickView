@@ -74,7 +74,6 @@ internal sealed class PanelForm : Form
     private const int DrawerLeaveMs = 280;
     private bool _wifiHot;
     private Rectangle _chevronHit;
-    private QuickHit _hover = QuickHit.None;
     private bool _chipHoverCpu;
     private bool _chipHoverMem;
     private bool _chipHoverGpu;
@@ -90,7 +89,6 @@ internal sealed class PanelForm : Form
     private Rectangle _batteryHit;
     private bool _batteryHot;
     private Rectangle _brightTrack;
-    private Rectangle _brightThumb;
     private string _brightId = "";
     private bool _brightDragging;
     private bool _brightHover;
@@ -342,7 +340,7 @@ internal sealed class PanelForm : Form
 
     private int Px(int dip)
     {
-        return (int)Math.Round(dip * _dpi / 96f * Fit());
+        return ChromeLayout.Px(dip, _dpi, Fit());
     }
 
     private int MaxHeight()
@@ -359,12 +357,12 @@ internal sealed class PanelForm : Form
 
     private int ContentInner()
     {
-        return Px(380) - Px(32) - _gutter;
+        return ChromeLayout.ContentInnerPx(_dpi, Fit(), _gutter);
     }
 
     private void ApplySize()
     {
-        int w = Px(380);
+        int w = Px(ChromeLayout.PanelWidthDip);
         _gutter = 0;
         _headH = Chrome(null);
         _docH = Body(null, _headH);
@@ -685,8 +683,8 @@ internal sealed class PanelForm : Form
         int y = Px(14);
         int inner = ContentInner();
         int volW = Px(ChromeLayout.VolWidthDip);
-        int gap = Px(8);
-        int mainW = Math.Max(Px(120), inner - volW - gap);
+        int gap = Px(ChromeLayout.VolMainGapDip);
+        int mainW = Math.Max(Px(ChromeLayout.MainMinWidthDip), inner - volW - gap);
         int y0 = y;
         y = Header(g, x, y, mainW);
         int afterHeader = y;
@@ -694,10 +692,10 @@ internal sealed class PanelForm : Form
         int volBottom = FirstControllableBrightness() != null
             ? y - Px(10)
             : afterHeader - Px(14);
-        if (volBottom < y0 + Px(40))
-            volBottom = y0 + Px(40);
+        if (volBottom < y0 + Px(ChromeLayout.VolMinHeightDip))
+            volBottom = y0 + Px(ChromeLayout.VolMinHeightDip);
         // Full column hit; shorten fill from the top so the speaker sits above the track.
-        _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(40), volBottom - y0));
+        _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(ChromeLayout.VolMinHeightDip), volBottom - y0));
         ChromeLayout.VolumeColumnGeom vol = ChromeLayout.LayoutVolumeColumnForDisplay(
             _volTrack.Width, _volTrack.Height, _dpi, Fit());
         _volFill = new Rectangle(_volTrack.X, _volTrack.Y + vol.BadgeHeight, _volTrack.Width, vol.FillHeight);
@@ -758,7 +756,6 @@ internal sealed class PanelForm : Form
     private int BrightnessStrip(Graphics g, int x, int y, int inner)
     {
         _brightTrack = Rectangle.Empty;
-        _brightThumb = Rectangle.Empty;
         BrightnessMonitor mon = FirstControllableBrightness();
         if (mon == null)
         {
@@ -766,9 +763,8 @@ internal sealed class PanelForm : Form
             return y;
         }
         _brightId = mon.Id ?? "";
-        // HyperOS-style fill block (~40% shorter than the first Px(56) pass).
-        int blockH = Px(34);
-        int gapBelow = Px(10);
+        int blockH = Px(ChromeLayout.BrightBlockDip);
+        int gapBelow = Px(ChromeLayout.BrightGapBelowDip);
         _brightTrack = new Rectangle(x, y, inner, blockH);
         if (g != null)
         {
@@ -779,54 +775,28 @@ internal sealed class PanelForm : Form
                 ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
                 : Track;
             QuickActions.DrawFillBlock(g, _brightTrack, v, back, UiTheme.Accent);
-            DrawLevelBadge(g, _brightTrack, mon.Percent.ToString(), _fontLevel, false, QuickActions.GlyphSun);
+            DrawBrightnessBadge(g, _brightTrack, mon.Percent.ToString(), _fontLevel);
         }
         return y + blockH + gapBelow;
     }
 
-    /// <summary>
-    /// Level digits plus identity glyph (sun / speaker), centered in the fill block.
-    /// </summary>
-    private void DrawLevelBadge(Graphics g, Rectangle bounds, string text, Font font, bool verticalStack, Action<Graphics, Rectangle, Color> glyph)
+    /// <summary>Sun + level digits centered horizontally in the brightness fill block.</summary>
+    private void DrawBrightnessBadge(Graphics g, Rectangle bounds, string text, Font font)
     {
-        if (font == null || string.IsNullOrEmpty(text) || glyph == null)
+        if (font == null || string.IsNullOrEmpty(text))
             return;
         SizeF textSize = g.MeasureString(text, font);
         int textW = (int)Math.Ceiling(textSize.Width);
         int textH = (int)Math.Ceiling(font.GetHeight());
         int gap = Px(4);
-        int icon;
-        int groupW;
-        int groupH;
-        if (verticalStack)
-        {
-            // Narrow volume column — speaker is a solid glyph; keep it smaller than the sun on brightness.
-            gap = Px(3);
-            icon = Math.Min(Px(ChromeLayout.VolIconDip), Math.Max(Px(ChromeLayout.VolIconMinDip), bounds.Width - Px(14)));
-            groupW = Math.Max(icon, textW);
-            groupH = icon + gap + textH;
-        }
-        else
-        {
-            icon = Math.Min(Px(14), Math.Max(Px(10), bounds.Height - Px(8)));
-            groupW = icon + gap + textW;
-            groupH = Math.Max(icon, textH);
-        }
+        int icon = Math.Min(Px(14), Math.Max(Px(10), bounds.Height - Px(8)));
+        int groupW = icon + gap + textW;
+        int groupH = Math.Max(icon, textH);
         int left = bounds.X + Math.Max(0, (bounds.Width - groupW) / 2);
         int top = bounds.Y + Math.Max(0, (bounds.Height - groupH) / 2);
-        Rectangle iconRect;
-        Rectangle textRect;
-        if (verticalStack)
-        {
-            iconRect = new Rectangle(left + (groupW - icon) / 2, top, icon, icon);
-            textRect = new Rectangle(left + (groupW - textW) / 2, top + icon + gap, textW, textH);
-        }
-        else
-        {
-            iconRect = new Rectangle(left, top + (groupH - icon) / 2, icon, icon);
-            textRect = new Rectangle(left + icon + gap, top + (groupH - textH) / 2, textW, textH);
-        }
-        glyph(g, iconRect, TextMain);
+        Rectangle iconRect = new Rectangle(left, top + (groupH - icon) / 2, icon, icon);
+        Rectangle textRect = new Rectangle(left + icon + gap, top + (groupH - textH) / 2, textW, textH);
+        QuickActions.GlyphSun(g, iconRect, TextMain);
         using (StringFormat fmt = new StringFormat())
         {
             fmt.Alignment = StringAlignment.Center;
@@ -924,7 +894,7 @@ internal sealed class PanelForm : Form
         if (g == null)
             return;
 
-        int gap = Px(6);
+        int gap = Px(ChromeLayout.HeaderGapDip);
         int right = x + inner;
         int padY = Px(4);
         int chevReserve = Math.Max(Px(ChromeLayout.ChevronReserveMinDip), row); // minimum left zone before network
@@ -932,7 +902,7 @@ internal sealed class PanelForm : Form
         // 1) Battery flush right
         int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
         int battLeft = _snap.BatteryKnown ? right - battW : right;
-        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
+        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(ChromeLayout.HeaderMidGapDip) : right;
 
         // 2) Measure network; right-align against battery
         NetworkCluster net = MeasureNetworkCluster(g, row);
@@ -1534,7 +1504,7 @@ internal sealed class PanelForm : Form
         return y + _textH + Px(8);
     }
 
-    /// <summary>Tighter fact row for the no-scroll resting overview.</summary>
+    /// <summary>Tighter fact row for the compact CPU+Memory resting overview.</summary>
     private int RestingFact(Graphics g, int x, int y, int inner, string label, string value)
     {
         if (g != null)
@@ -2070,24 +2040,22 @@ internal sealed class PanelForm : Form
 
     private void UpdateHover(Point p, Point body)
     {
-        QuickHit prev = _hover;
         bool prevCpu = _chipHoverCpu;
         bool prevMem = _chipHoverMem;
         bool prevGpu = _chipHoverGpu;
         bool prevDisk = _chipHoverDisk;
         bool prevTrim = _trimHover;
+        bool prevWifi = _wifiHot;
+        bool prevChevron = _chevronHot;
+        bool prevBatt = _batteryHot;
+        bool prevBright = _brightHover;
+        bool prevVol = _volHover;
 
         _chipHoverCpu = _cpuChip.Contains(p);
         _chipHoverMem = _memChip.Contains(p);
         _chipHoverGpu = _gpuChip.Contains(p);
         _chipHoverDisk = _diskChip.Contains(p);
         _trimHover = _detail == DetailMode.Memory && _trimRect.Contains(body);
-        _hover = QuickHit.None;
-        bool prevWifi = _wifiHot;
-        bool prevChevron = _chevronHot;
-        bool prevBatt = _batteryHot;
-        bool prevBright = _brightHover;
-        bool prevVol = _volHover;
         _wifiHot = _wifiHit.Contains(p);
         _chevronHot = _chevronHit.Contains(p);
         _batteryHot = _batteryHit.Contains(p);
@@ -2106,7 +2074,7 @@ internal sealed class PanelForm : Form
             || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;
         Cursor = hand ? Cursors.Hand : Cursors.Default;
 
-        if (prev != _hover || prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
+        if (prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
             || prevDisk != _chipHoverDisk || prevTrim != _trimHover || prevWifi != _wifiHot || prevChevron != _chevronHot
             || prevBatt != _batteryHot || prevBright != _brightHover || prevVol != _volHover)
             Invalidate();

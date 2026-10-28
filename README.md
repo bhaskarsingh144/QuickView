@@ -30,7 +30,7 @@ Live CPU and memory at a glance on the resting panel — GPU and disk behind met
 
 ### Real-time monitoring
 
-- **Resting overview** — CPU + Memory only (no Disk/GPU blocks); graphs with title + current % (+ temp). CPU keeps name, cores/threads, rated/live clock, per-core grid; Memory keeps in-use / committed / cached + modules (pools on Memory chip)
+- **Resting overview** — compact CPU + Memory (no Disk/GPU blocks); graphs with title + current % (+ temp). CPU keeps name, cores/threads, rated/live clock, per-core grid; Memory keeps in-use / committed / cached + modules (pools on Memory chip)
 - **CPU chip** — usage %, processor name, cores/threads, rated and live clock, per-core clocks, optional temperature, top processes
 - **Memory chip** — in-use (Task Manager–aligned), committed, cached, paged/non-paged pools, module info, optional temperature, Trim, top processes
 - **GPU chip** — 3D engine usage (capped at 100%), dedicated and shared adapter memory, optional temperature

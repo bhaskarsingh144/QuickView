@@ -14,7 +14,7 @@ Automated: `.\scripts\test.ps1` (DisplayScale + ChromeLayout suites).
 
 | ID | Result | Notes |
 |----|--------|-------|
-| A1 Resting panel | | Chrome size similar; body text not oversized |
+| A1 Resting panel | | Compact CPU+Memory only; chrome size similar; body text not oversized |
 | A2 Header rates | | Stable-width rates; drawer hit does not twitch; fits beside battery |
 | A3 Brightness / volume labels | | Volume speaker above fill, digits inside; readable at 100–150% |
 | A4 Quick settings Actions | | Icon and label do not overlap (“Shut down”, “Explorer”) |

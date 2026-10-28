@@ -106,7 +106,7 @@ internal static class ChromeLayoutTests
 
         int volW = ChromeLayout.Px(ChromeLayout.VolWidthDip, p.Dpi, p.Fit);
         int volH = ChromeLayout.Px(ChromeLayout.HeaderRowDip, p.Dpi, p.Fit)
-            + ChromeLayout.Px(34, p.Dpi, p.Fit); // header + brightness strip
+            + ChromeLayout.Px(ChromeLayout.BrightBlockDip, p.Dpi, p.Fit);
         ChromeLayout.VolumeColumnGeom vol = ChromeLayout.LayoutVolumeColumnForDisplay(volW, volH, p.Dpi, p.Fit);
         ExpectTrue(vol.BadgeHeight + vol.FillHeight == volH, c.Name + " volume partitions");
         ExpectTrue(vol.FillHeight >= ChromeLayout.Px(ChromeLayout.VolFillMinDip, p.Dpi, p.Fit)
