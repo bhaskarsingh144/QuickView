@@ -1,8 +1,8 @@
 # QuickView
 
-**A lightweight system monitor for the right edge of your Windows desktop.**
+**Edge-docked system monitor for the right edge of your Windows desktop.**
 
-Live CPU and memory at a glance on the resting panel — GPU and disk behind metric chips — with brightness and volume on the main chrome, plus a quick settings drawer for text scale and everyday system actions. No installer required. No telemetry. Runs locally.
+Live CPU and memory on the resting panel — GPU and disk behind metric chips — with brightness and volume on the main chrome, plus a quick settings drawer for text scale and everyday system actions. No installer required. No telemetry. Runs locally.
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.5%2B-512BD4?style=flat-square)
@@ -175,6 +175,8 @@ QuickView/
 ## Contributing
 
 Bugs, fixes, and ideas welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build steps and guidelines.
+
+Work on a **feature branch** and open a pull request against `master` — direct pushes to `master` are blocked.
 
 ---
 
