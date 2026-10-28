@@ -53,7 +53,7 @@ Open from the left-edge chevron (hover or click):
 | Section | What you get |
 | --- | --- |
 | **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
-| **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute |
+| **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute, Relaunch (restarts QuickView) |
 
 Restart and Shut down require a second confirm within two seconds.
 

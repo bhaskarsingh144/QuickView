@@ -304,21 +304,22 @@ internal sealed class QuickSettingsPopup : Form
             _quick.Armed == QuickArm.Shutdown ? "Confirm" : "Shut down",
             "Display",
             "Sound",
-            _quick.Muted ? "Unmute" : "Mute"
+            _quick.Muted ? "Unmute" : "Mute",
+            "Relaunch"
         };
         QuickHit[] hits = new QuickHit[]
         {
             QuickHit.TileExplorer, QuickHit.TileLock, QuickHit.TileSleep,
             QuickHit.TileRestart, QuickHit.TileShutdown, QuickHit.TileDisplaySettings,
-            QuickHit.TileSoundSettings, QuickHit.TileMute
+            QuickHit.TileSoundSettings, QuickHit.TileMute, QuickHit.TileAppRestart
         };
         Action<Graphics, Rectangle, Color>[] glyphs = new Action<Graphics, Rectangle, Color>[]
         {
             QuickActions.GlyphExplorer, QuickActions.GlyphLock, QuickActions.GlyphSleep,
             QuickActions.GlyphRestart, QuickActions.GlyphShutdown, QuickActions.GlyphSettings,
-            QuickActions.GlyphSpeakerOpen, QuickActions.GlyphSpeakerOpen
+            QuickActions.GlyphSpeakerOpen, QuickActions.GlyphSpeakerOpen, QuickActions.GlyphAppRestart
         };
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 9; i++)
         {
             int col = i % 3;
             int row = i / 3;
@@ -386,6 +387,7 @@ internal sealed class QuickSettingsPopup : Form
         else if (hit == QuickHit.TileDisplaySettings) _quick.TileDisplaySettings = r;
         else if (hit == QuickHit.TileSoundSettings) _quick.TileSoundSettings = r;
         else if (hit == QuickHit.TileMute) _quick.TileMute = r;
+        else if (hit == QuickHit.TileAppRestart) _quick.TileAppRestart = r;
     }
 
     private static StringFormat CenterFormat()
@@ -556,6 +558,15 @@ internal sealed class QuickSettingsPopup : Form
         if (hit == QuickHit.TileSoundSettings)
         {
             SystemActions.OpenSettings("ms-settings:sound");
+            return;
+        }
+        if (hit == QuickHit.TileAppRestart)
+        {
+            if (!SystemActions.RestartQuickView())
+            {
+                _quick.StatusLine = SystemActions.LastError;
+                Invalidate();
+            }
         }
     }
 }

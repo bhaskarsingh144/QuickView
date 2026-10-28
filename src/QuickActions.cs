@@ -21,7 +21,8 @@ internal enum QuickHit
     TileShutdown,
     TileDisplaySettings,
     TileSoundSettings,
-    TileMute
+    TileMute,
+    TileAppRestart
 }
 
 internal enum QuickArm
@@ -53,6 +54,7 @@ internal sealed class QuickActions
     public Rectangle TileDisplaySettings;
     public Rectangle TileSoundSettings;
     public Rectangle TileMute;
+    public Rectangle TileAppRestart;
 
     public float Volume01;
     public bool Muted;
@@ -86,6 +88,7 @@ internal sealed class QuickActions
         TileDisplaySettings = Rectangle.Empty;
         TileSoundSettings = Rectangle.Empty;
         TileMute = Rectangle.Empty;
+        TileAppRestart = Rectangle.Empty;
     }
 
     public void ClearArmIfExpired()
@@ -123,6 +126,7 @@ internal sealed class QuickActions
         if (TileDisplaySettings.Contains(p)) return QuickHit.TileDisplaySettings;
         if (TileSoundSettings.Contains(p)) return QuickHit.TileSoundSettings;
         if (TileMute.Contains(p)) return QuickHit.TileMute;
+        if (TileAppRestart.Contains(p)) return QuickHit.TileAppRestart;
         return QuickHit.None;
     }
 
@@ -365,6 +369,28 @@ internal sealed class QuickActions
             int cy = r.Y + r.Height / 3;
             g.DrawLine(pen, cx - 4, cy, cx, cy);
             g.DrawLine(pen, cx, cy, cx, cy + 4);
+        }
+    }
+
+    /// <summary>
+    /// App relaunch: rounded panel outline with a refresh arc (distinct from PC Restart).
+    /// </summary>
+    public static void GlyphAppRestart(Graphics g, Rectangle r, Color ink)
+    {
+        using (Pen pen = new Pen(ink, 1.5f))
+        {
+            pen.StartCap = LineCap.Round;
+            pen.EndCap = LineCap.Round;
+            int inset = Math.Max(1, r.Width / 10);
+            g.DrawRectangle(pen, r.X + inset, r.Y + inset, r.Width - inset * 2, r.Height - inset * 2);
+            int arc = Math.Max(8, r.Width / 2);
+            int ax = r.X + (r.Width - arc) / 2;
+            int ay = r.Y + (r.Height - arc) / 2;
+            g.DrawArc(pen, ax, ay, arc, arc, 40, 260);
+            int tipX = ax + arc - 1;
+            int tipY = ay + arc / 3;
+            g.DrawLine(pen, tipX - 3, tipY, tipX, tipY);
+            g.DrawLine(pen, tipX, tipY, tipX, tipY + 3);
         }
     }
 
