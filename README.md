@@ -40,11 +40,11 @@ Live CPU, memory, GPU, and disk metrics at a glance — with brightness and volu
 
 ### Status header / chrome
 
-- Compact **network** block: Wi-Fi/Ethernet icon + download / upload rates (no SSID)
-- Compact **battery** percent with charging indicator
+- Wide **chevron** hit zone (opens Quick settings); **network** (Wi-Fi icon + rates) sits next to **battery**
+- Compact **battery** percent (semibold metric face) with charging indicator
 - Click network → Windows network settings · Click battery → power options
-- **Brightness** HyperOS-style fill block under the header — drag or scroll ±1%; panel soft-dims while scrolling so you can judge the screen
-- **Volume** vertical HyperOS-style fill on the right of the header/brightness column — drag or scroll ±1% (no dim)
+- **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling
+- **Volume** vertical fill with speaker icon + level — drag or scroll ±1% (no dim)
 
 ### Quick settings drawer
 
