@@ -283,11 +283,11 @@ internal sealed class PanelForm : Form
         _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
         // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
         // Modest metric face — large enough to read, small enough that the cluster stays stable.
-        _fontRate = CreateMetricFont(11.5f * text);
-        _fontLevel = CreateMetricFont(11f * text);
-        // Narrow volume column — smaller digits than the brightness strip.
-        _fontVolLevel = CreateMetricFont(8.5f * text);
-        _fontBattery = CreateMetricFont(11f * text);
+        _fontRate = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.RateFontPt, text));
+        _fontLevel = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.LevelFontPt, text));
+        // Narrow volume column — smaller digits, but never below the readable metric floor.
+        _fontVolLevel = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.VolLevelFontPt, text));
+        _fontBattery = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.BatteryFontPt, text));
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
@@ -337,10 +337,7 @@ internal sealed class PanelForm : Form
 
     private float FontEm()
     {
-        float t = Fit() * _textFit;
-        if (t < 0.55f)
-            t = 0.55f;
-        return t;
+        return ChromeLayout.FontEm(Fit(), _textFit);
     }
 
     private int Px(int dip)
@@ -687,7 +684,7 @@ internal sealed class PanelForm : Form
         int x = Px(16);
         int y = Px(14);
         int inner = ContentInner();
-        int volW = Px(28);
+        int volW = Px(ChromeLayout.VolWidthDip);
         int gap = Px(8);
         int mainW = Math.Max(Px(120), inner - volW - gap);
         int y0 = y;
@@ -701,18 +698,15 @@ internal sealed class PanelForm : Form
             volBottom = y0 + Px(40);
         // Full column hit; shorten fill from the top so the speaker sits above the track.
         _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(40), volBottom - y0));
-        int iconPad = Px(2);
-        int iconSize = Math.Min(Px(10), Math.Max(8, volW - Px(12)));
-        int badgeH = iconSize + iconPad * 2;
-        if (badgeH > _volTrack.Height - Px(28))
-            badgeH = Math.Max(Px(14), _volTrack.Height - Px(28));
-        _volFill = new Rectangle(_volTrack.X, _volTrack.Y + badgeH, _volTrack.Width, _volTrack.Height - badgeH);
+        ChromeLayout.VolumeColumnGeom vol = ChromeLayout.LayoutVolumeColumnForDisplay(
+            _volTrack.Width, _volTrack.Height, _dpi, Fit());
+        _volFill = new Rectangle(_volTrack.X, _volTrack.Y + vol.BadgeHeight, _volTrack.Width, vol.FillHeight);
         if (g != null)
-            DrawVolumeColumn(g);
+            DrawVolumeColumn(g, vol);
         return Chips(g, x, y, inner);
     }
 
-    private void DrawVolumeColumn(Graphics g)
+    private void DrawVolumeColumn(Graphics g, ChromeLayout.VolumeColumnGeom vol)
     {
         if (_volTrack.Width < 1 || _volTrack.Height < 1)
             return;
@@ -723,16 +717,17 @@ internal sealed class PanelForm : Form
         if (_volumeMuted)
             v = 0f;
         bool muted = !_volumeKnown || _volumeMuted;
-        int badgeH = Math.Max(1, _volFill.Y - _volTrack.Y);
-        int icon = Math.Min(Px(10), Math.Max(8, _volTrack.Width - Px(12)));
-        if (icon > badgeH - Px(2))
-            icon = Math.Max(6, badgeH - Px(2));
-        Rectangle iconRect = new Rectangle(
-            _volTrack.X + (_volTrack.Width - icon) / 2,
-            _volTrack.Y + Math.Max(0, (badgeH - icon) / 2),
-            icon,
-            icon);
-        QuickActions.GlyphSpeaker(g, iconRect, TextMain, muted);
+        int icon = vol.IconSize;
+        int badgeH = vol.BadgeHeight;
+        if (icon > 0 && badgeH > 0)
+        {
+            Rectangle iconRect = new Rectangle(
+                _volTrack.X + (_volTrack.Width - icon) / 2,
+                _volTrack.Y + Math.Max(0, (badgeH - icon) / 2),
+                icon,
+                icon);
+            QuickActions.GlyphSpeaker(g, iconRect, TextMain, muted);
+        }
         if (_volFill.Height > 0)
         {
             QuickActions.DrawFillBlockVertical(g, _volFill, v, back, UiTheme.Accent);
@@ -807,13 +802,13 @@ internal sealed class PanelForm : Form
         {
             // Narrow volume column — speaker is a solid glyph; keep it smaller than the sun on brightness.
             gap = Px(3);
-            icon = Math.Min(Px(10), Math.Max(8, bounds.Width - Px(14)));
+            icon = Math.Min(Px(ChromeLayout.VolIconDip), Math.Max(Px(ChromeLayout.VolIconMinDip), bounds.Width - Px(14)));
             groupW = Math.Max(icon, textW);
             groupH = icon + gap + textH;
         }
         else
         {
-            icon = Math.Min(Px(14), Math.Max(10, bounds.Height - Px(8)));
+            icon = Math.Min(Px(14), Math.Max(Px(10), bounds.Height - Px(8)));
             groupW = icon + gap + textW;
             groupH = Math.Max(icon, textH);
         }
@@ -909,7 +904,7 @@ internal sealed class PanelForm : Form
     private int Header(Graphics g, int x, int y, int inner)
     {
         // Compact header row — network rates + Wi-Fi fit without dominating the drawer hit.
-        int row = Px(48);
+        int row = Px(ChromeLayout.HeaderRowDip);
         if (g != null)
         {
             DrawStatus(g, x, y, inner, row);
@@ -932,7 +927,7 @@ internal sealed class PanelForm : Form
         int gap = Px(6);
         int right = x + inner;
         int padY = Px(4);
-        int chevReserve = Math.Max(Px(44), row); // minimum left zone before network
+        int chevReserve = Math.Max(Px(ChromeLayout.ChevronReserveMinDip), row); // minimum left zone before network
 
         // 1) Battery flush right
         int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
@@ -1003,7 +998,7 @@ internal sealed class PanelForm : Form
         const string ArrowDown = "\u2193";
         const string ArrowUp = "\u2191";
         // Fixed sample so digit changes (0.09 → 12.34) do not resize the cluster / drawer hit.
-        const string RateSample = "99.99 MB/s";
+        string rateSample = ChromeLayout.NetworkRateSample;
         net.RateFont = _fontRate ?? _fontLabel;
         net.LineH = Math.Max(Px(12), (int)Math.Ceiling(net.RateFont.GetHeight()));
         net.RowGap = Math.Max(1, Px(2));
@@ -1015,7 +1010,7 @@ internal sealed class PanelForm : Form
             measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
             arrowDownSize = g.MeasureString(ArrowDown, net.RateFont, int.MaxValue, measure);
             arrowUpSize = g.MeasureString(ArrowUp, net.RateFont, int.MaxValue, measure);
-            sampleSize = g.MeasureString(RateSample, net.RateFont, int.MaxValue, measure);
+            sampleSize = g.MeasureString(rateSample, net.RateFont, int.MaxValue, measure);
         }
         net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
         net.RateTextW = (int)Math.Ceiling(sampleSize.Width) + Px(2);
@@ -1111,9 +1106,9 @@ internal sealed class PanelForm : Form
         Font battFont = _fontBattery ?? _fontValue;
         // Fixed slot (100% + icon pair) so 9%→100% and plug/bolt changes do not twitch the header.
         SizeF size = g.MeasureString("100%", battFont);
-        int icon = Px(12);
-        int gap = Px(3);
-        return (int)Math.Ceiling(size.Width) + 2 * (icon + gap) + Px(4);
+        int icon = Px(ChromeLayout.BatteryIconDip);
+        int gap = Px(ChromeLayout.BatteryIconGapDip);
+        return (int)Math.Ceiling(size.Width) + 2 * (icon + gap) + Px(ChromeLayout.BatterySlotPadDip);
     }
 
     private void DrawHeaderBatteryLeft(Graphics g, int x, int y, int row, int rightLimit)
@@ -1123,8 +1118,8 @@ internal sealed class PanelForm : Form
         bool plug = _snap.AcKnown && _snap.PluggedIn;
         bool cell = _snap.AcKnown && !_snap.PluggedIn;
         bool bolt = _snap.Charging;
-        int s = Px(12);
-        int gap = Px(3);
+        int s = Px(ChromeLayout.BatteryIconDip);
+        int gap = Px(ChromeLayout.BatteryIconGapDip);
         int slot = EstimateBatteryWidth(g);
         if (x + slot > rightLimit)
             slot = Math.Max(Px(40), rightLimit - x);
