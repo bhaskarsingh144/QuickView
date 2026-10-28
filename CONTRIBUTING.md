@@ -91,11 +91,16 @@ Before submitting a pull request:
 
 ### Submitting Changes
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
+`master` is protected. Do **not** push commits directly to `master`. All changes land via pull request.
+
+1. Fork the repository (or use a branch on a clone if you are a collaborator)
+2. Create a feature branch from the latest `master` (`git checkout -b feature/your-feature`)
 3. Commit your changes with descriptive messages
-4. Push to your fork (`git push origin feature/your-feature`)
-5. Open a pull request
+4. Push the feature branch (`git push -u origin feature/your-feature`)
+5. Open a pull request targeting `master`
+6. Fill in the PR template (summary + test plan). Keep PRs focused when you can
+
+Maintainers squash-merge into `master`. Feature branches are deleted after merge.
 
 ### Commit Message Format
 
@@ -103,6 +108,7 @@ Use clear, descriptive commit messages:
 - `feat: add brightness control for external monitors`
 - `fix: correct GPU memory calculation`
 - `docs: update README with new setup instructions`
+- `chore: remove unused drawer slider helpers`
 
 ## Known Limitations
 
@@ -115,10 +121,10 @@ Use clear, descriptive commit messages:
 
 When reporting bugs, please include:
 - Windows version
-- Screen resolution and DPI
+- Screen resolution and **DPI / display scale** (and laptop panel size if known, e.g. 16″ FHD)
 - Steps to reproduce
 - Expected vs actual behavior
-- Any relevant error messages from `QuickView.log` (in the app directory)
+- Any relevant error messages from `QuickView.log` (next to the exe, or under the install folder)
 
 ## Feature Requests
 
