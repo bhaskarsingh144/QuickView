@@ -839,44 +839,63 @@ internal sealed class PanelForm : Form
             chevGlyph);
         DrawHeaderChevron(g, chevGlyphRect, open, open || _chevronHot ? TextMain : TextMuted);
 
-        // Network: Wi-Fi icon + down/up rates only (no SSID) — content-sized, not a full-width block.
-        // Match rate stack height so the fan glyph reads at a glance.
-        int wifi = Math.Min(Px(28), row - Px(4));
-        int rateIcon = Px(10);
+        // Battery first so the network cluster can center in the mid band (chevron … battery).
+        int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
+        int battLeft = _snap.BatteryKnown ? right - battW : right;
+        int midLeft = _chevronHit.Right + Px(6);
+        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
+
+        // Rates: Unicode arrows in the same font as speeds → one baseline (no separate glyph vs text drift).
         float down = _snap.NetKnown ? _snap.DownMBps : 0f;
         float up = _snap.NetKnown ? _snap.UpMBps : 0f;
-        string dText = down.ToString("0.00") + " MB/s";
-        string uText = up.ToString("0.00") + " MB/s";
+        string dSpeed = down.ToString("0.00") + " MB/s";
+        string uSpeed = up.ToString("0.00") + " MB/s";
+        const string ArrowDown = "\u2193"; // ↓
+        const string ArrowUp = "\u2191";   // ↑
         Font rateFont = _fontRate ?? _fontLabel;
-        int rateTextH = (int)Math.Ceiling(rateFont.GetHeight()) + 1;
-        SizeF dSize = g.MeasureString(dText, rateFont);
-        SizeF uSize = g.MeasureString(uText, rateFont);
-        int dW = (int)Math.Ceiling(dSize.Width);
-        int uW = (int)Math.Ceiling(uSize.Width);
-        int rateColW = rateIcon + Px(3) + Math.Max(dW, uW);
-        int lineH = Math.Max(rateTextH, rateIcon);
-        int ratesH = lineH * 2 + Px(2);
-        int netW = wifi + Px(8) + rateColW;
-        int wifiLeft = _chevronHit.Right + Px(6);
+        int lineH = Math.Max(Px(12), (int)Math.Ceiling(rateFont.GetHeight()));
+        int rowGap = Math.Max(1, Px(2));
+        SizeF arrowDownSize;
+        SizeF arrowUpSize;
+        SizeF dSize;
+        SizeF uSize;
+        using (StringFormat measure = new StringFormat(StringFormat.GenericTypographic))
+        {
+            measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+            arrowDownSize = g.MeasureString(ArrowDown, rateFont, int.MaxValue, measure);
+            arrowUpSize = g.MeasureString(ArrowUp, rateFont, int.MaxValue, measure);
+            dSize = g.MeasureString(dSpeed, rateFont, int.MaxValue, measure);
+            uSize = g.MeasureString(uSpeed, rateFont, int.MaxValue, measure);
+        }
+        int arrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
+        int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
+        int rateColW = arrowColW + textW;
+        int ratesH = lineH * 2 + rowGap;
+        int maxSide = row - Px(2);
+        if (ratesH > maxSide)
+        {
+            lineH = Math.Max(Px(10), (maxSide - rowGap) / 2);
+            ratesH = lineH * 2 + rowGap;
+        }
+        // Square Wi-Fi == meters stack height; shared top/bottom.
+        int wifi = ratesH;
+        int clusterGap = Px(6);
+        int netW = wifi + clusterGap + rateColW;
+        int midW = Math.Max(0, midRight - midLeft);
+        // Mid band, slightly left of center: Wi-Fi on the left of the pair, meters on the right.
+        int wifiLeft = midLeft + Math.Max(0, (midW - netW) * 2 / 5);
+        int clusterTop = y + Math.Max(0, (row - ratesH) / 2);
         _wifiHit = new Rectangle(wifiLeft - Px(2), y, netW + Px(4), row);
         if (_wifiHot)
             FillRound(g, _wifiHit, Px(8), UiTheme.Hover);
-        DrawWifi(g, new Rectangle(wifiLeft, y + (row - wifi) / 2, wifi, wifi), _snap.WifiUp || _snap.NetKnown, true);
-        int ratesX = wifiLeft + wifi + Px(8);
-        int ratesY = y + Math.Max(0, (row - ratesH) / 2);
-        DrawDown(g, new Rectangle(ratesX, ratesY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Down);
-        using (SolidBrush brush = new SolidBrush(UiTheme.Down))
-            g.DrawString(dText, rateFont, brush, ratesX + rateIcon + Px(3), ratesY + Math.Max(0, (lineH - rateTextH) / 2));
-        int upY = ratesY + lineH + Px(2);
-        DrawUp(g, new Rectangle(ratesX, upY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Up);
-        using (SolidBrush brush = new SolidBrush(UiTheme.Up))
-            g.DrawString(uText, rateFont, brush, ratesX + rateIcon + Px(3), upY + Math.Max(0, (lineH - rateTextH) / 2));
+        DrawWifi(g, new Rectangle(wifiLeft, clusterTop, wifi, wifi),
+            _snap.WifiUp || _snap.NetKnown, true);
+        int ratesX = wifiLeft + wifi + clusterGap;
+        DrawNetworkRateRow(g, ratesX, clusterTop, lineH, arrowColW, ArrowDown, dSpeed, rateFont, UiTheme.Down);
+        DrawNetworkRateRow(g, ratesX, clusterTop + lineH + rowGap, lineH, arrowColW, ArrowUp, uSpeed, rateFont, UiTheme.Up);
 
-        // Compact battery: icons + percent, reserved from the right.
         if (_snap.BatteryKnown)
         {
-            int battW = EstimateBatteryWidth(g);
-            int battLeft = right - battW;
             int divX = Math.Max(_wifiHit.Right + gap, battLeft - Px(4));
             using (Pen pen = new Pen(Line, 1f))
                 g.DrawLine(pen, divX, y + padY, divX, y + row - padY);
@@ -973,9 +992,9 @@ internal sealed class PanelForm : Form
         float left = r.Left + (r.Width - size) / 2f;
         float top = r.Top + (r.Height - size) / 2f;
         float cx = left + size / 2f;
-        // Anchor near the bottom so the three arcs fill the square (Fluent-style fan).
-        float cy = top + size * 0.86f;
-        float stroke = Math.Max(2.4f, size * 0.13f);
+        // Fan centered in the square (not sunk to the bottom — that looked lower than the meters).
+        float cy = top + size * 0.78f;
+        float stroke = Math.Max(2.2f, size * 0.12f);
         SmoothingMode prev = g.SmoothingMode;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using (Pen pen = new Pen(ink, stroke))
@@ -983,8 +1002,7 @@ internal sealed class PanelForm : Form
             pen.StartCap = LineCap.Round;
             pen.EndCap = LineCap.Round;
             pen.LineJoin = LineJoin.Round;
-            // Outer → mid → inner; diameters sized so the fan uses almost the full box.
-            float[] diams = new float[] { size * 0.96f, size * 0.62f, size * 0.30f };
+            float[] diams = new float[] { size * 0.90f, size * 0.58f, size * 0.28f };
             const float start = 215f;
             const float sweep = 110f;
             for (int i = 0; i < diams.Length; i++)
@@ -1009,29 +1027,26 @@ internal sealed class PanelForm : Form
         g.SmoothingMode = prev;
     }
 
-    private static void DrawDown(Graphics g, Rectangle r, Color color)
+    /// <summary>
+    /// One rate line: arrow and speed share the same font + LineAlignment so they sit on one baseline.
+    /// Fixed arrow column keeps ↓/↑ numbers vertically column-aligned.
+    /// </summary>
+    private static void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int arrowColW, string arrow, string speed, Font font, Color color)
     {
-        using (Pen pen = new Pen(color, 1.6f))
+        Rectangle arrowRect = new Rectangle(x, y, arrowColW, lineH);
+        Rectangle textRect = new Rectangle(x + arrowColW, y, 240, lineH);
+        using (SolidBrush brush = new SolidBrush(color))
+        using (StringFormat arrowFmt = new StringFormat(StringFormat.GenericTypographic))
+        using (StringFormat textFmt = new StringFormat(StringFormat.GenericTypographic))
         {
-            pen.StartCap = LineCap.Round;
-            pen.EndCap = LineCap.Round;
-            int mid = r.Left + r.Width / 2;
-            g.DrawLine(pen, mid, r.Top + 1, mid, r.Bottom - 3);
-            g.DrawLine(pen, mid - 3, r.Bottom - 6, mid, r.Bottom - 2);
-            g.DrawLine(pen, mid + 3, r.Bottom - 6, mid, r.Bottom - 2);
-        }
-    }
-
-    private static void DrawUp(Graphics g, Rectangle r, Color color)
-    {
-        using (Pen pen = new Pen(color, 1.6f))
-        {
-            pen.StartCap = LineCap.Round;
-            pen.EndCap = LineCap.Round;
-            int mid = r.Left + r.Width / 2;
-            g.DrawLine(pen, mid, r.Top + 3, mid, r.Bottom - 1);
-            g.DrawLine(pen, mid - 3, r.Top + 6, mid, r.Top + 2);
-            g.DrawLine(pen, mid + 3, r.Top + 6, mid, r.Top + 2);
+            arrowFmt.Alignment = StringAlignment.Center;
+            arrowFmt.LineAlignment = StringAlignment.Center;
+            arrowFmt.FormatFlags |= StringFormatFlags.NoWrap;
+            textFmt.Alignment = StringAlignment.Near;
+            textFmt.LineAlignment = StringAlignment.Center;
+            textFmt.FormatFlags |= StringFormatFlags.NoWrap;
+            g.DrawString(arrow, font, brush, arrowRect, arrowFmt);
+            g.DrawString(speed, font, brush, textRect, textFmt);
         }
     }
 
