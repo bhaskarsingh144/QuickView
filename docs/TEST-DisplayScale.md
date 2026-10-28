@@ -2,7 +2,7 @@
 
 Targets the cramped-text case on **16″ ~1080p / FHD+ (16:10)** laptops while keeping **27″ 4K** looking as before.
 
-Automated: `.\scripts\test.ps1` (DisplayScale suite).
+Automated: `.\scripts\test.ps1` (DisplayScale + ChromeLayout suites).
 
 ## Baseline
 
@@ -14,9 +14,9 @@ Automated: `.\scripts\test.ps1` (DisplayScale suite).
 
 | ID | Result | Notes |
 |----|--------|-------|
-| A1 Resting panel | | Chrome size similar; body text not oversized |
-| A2 Header rates | | Bahnschrift rates fit without crowding battery |
-| A3 Brightness / volume labels | | Centered numbers still readable |
+| A1 Resting panel | | Compact CPU+Memory only; chrome size similar; body text not oversized |
+| A2 Header rates | | Stable-width rates; drawer hit does not twitch; fits beside battery |
+| A3 Brightness / volume labels | | Volume speaker above fill, digits inside; readable at 100–150% |
 | A4 Quick settings Actions | | Icon and label do not overlap (“Shut down”, “Explorer”) |
 | A5 Text size row | | A− / A+ / Apply not cramped |
 | A6 Windows scale 125% / 150% | | Still usable; text tighter than before |
@@ -32,4 +32,4 @@ Automated: `.\scripts\test.ps1` (DisplayScale suite).
 | ID | Result | Notes |
 |----|--------|-------|
 | C1 DPI change / move monitor | | Panel remounts fonts; drawer recreates |
-| C2 `.\scripts\test.ps1` | | Exit 0 |
+| C2 `.\scripts\test.ps1` | | Exit 0 (includes ChromeLayout header/volume budget) |

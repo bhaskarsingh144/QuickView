@@ -11,9 +11,6 @@ internal enum QuickHit
     TextPlus,
     TextScale,
     TextApply,
-    Mute,
-    Volume,
-    Brightness,
     TileExplorer,
     TileLock,
     TileSleep,
@@ -40,12 +37,6 @@ internal sealed class QuickActions
     public Rectangle TextTrack;
     public Rectangle TextThumb;
     public Rectangle TextApplyRect;
-    public Rectangle MuteRect;
-    public Rectangle VolumeTrack;
-    public Rectangle VolumeThumb;
-    public readonly List<Rectangle> BrightTracks = new List<Rectangle>();
-    public readonly List<Rectangle> BrightThumbs = new List<Rectangle>();
-    public readonly List<string> BrightIds = new List<string>();
     public Rectangle TileExplorer;
     public Rectangle TileLock;
     public Rectangle TileSleep;
@@ -56,7 +47,6 @@ internal sealed class QuickActions
     public Rectangle TileMute;
     public Rectangle TileAppRestart;
 
-    public float Volume01;
     public bool Muted;
     public int TextPercent = 100;
     public int TextAppliedPercent = 100;
@@ -64,7 +54,6 @@ internal sealed class QuickActions
     public string StatusLine = "";
     public QuickArm Armed = QuickArm.None;
     public DateTime ArmedUntil = DateTime.MinValue;
-    public int DragBrightIndex = -1;
 
     public void ClearHits()
     {
@@ -74,12 +63,6 @@ internal sealed class QuickActions
         TextTrack = Rectangle.Empty;
         TextThumb = Rectangle.Empty;
         TextApplyRect = Rectangle.Empty;
-        MuteRect = Rectangle.Empty;
-        VolumeTrack = Rectangle.Empty;
-        VolumeThumb = Rectangle.Empty;
-        BrightTracks.Clear();
-        BrightThumbs.Clear();
-        BrightIds.Clear();
         TileExplorer = Rectangle.Empty;
         TileLock = Rectangle.Empty;
         TileSleep = Rectangle.Empty;
@@ -111,13 +94,6 @@ internal sealed class QuickActions
         if (TextPlusRect.Contains(p)) return QuickHit.TextPlus;
         if (TextTrack.Contains(p) || TextThumb.Contains(p)) return QuickHit.TextScale;
         if (TextDirty && TextApplyRect.Contains(p)) return QuickHit.TextApply;
-        if (MuteRect.Contains(p)) return QuickHit.Mute;
-        if (VolumeTrack.Contains(p) || VolumeThumb.Contains(p)) return QuickHit.Volume;
-        for (int i = 0; i < BrightTracks.Count; i++)
-        {
-            if (BrightTracks[i].Contains(p) || (i < BrightThumbs.Count && BrightThumbs[i].Contains(p)))
-                return QuickHit.Brightness;
-        }
         if (TileExplorer.Contains(p)) return QuickHit.TileExplorer;
         if (TileLock.Contains(p)) return QuickHit.TileLock;
         if (TileSleep.Contains(p)) return QuickHit.TileSleep;
@@ -128,39 +104,6 @@ internal sealed class QuickActions
         if (TileMute.Contains(p)) return QuickHit.TileMute;
         if (TileAppRestart.Contains(p)) return QuickHit.TileAppRestart;
         return QuickHit.None;
-    }
-
-    public int BrightnessIndexAt(Point p)
-    {
-        for (int i = 0; i < BrightTracks.Count; i++)
-        {
-            if (BrightTracks[i].Contains(p) || (i < BrightThumbs.Count && BrightThumbs[i].Contains(p)))
-                return i;
-        }
-        return -1;
-    }
-
-    public static void DrawQuickGlyph(Graphics g, Rectangle r, Color ink)
-    {
-        int inset = Math.Max(6, r.Width / 5);
-        int w = r.Width - 2 * inset;
-        int gap = Math.Max(4, (r.Height - 2 * inset) / 4);
-        int totalH = gap * 2;
-        int x = r.X + inset;
-        int y0 = r.Y + (r.Height - totalH) / 2;
-        using (Pen pen = new Pen(ink, 1.6f))
-        using (SolidBrush brush = new SolidBrush(ink))
-        {
-            pen.StartCap = LineCap.Round;
-            pen.EndCap = LineCap.Round;
-            for (int i = 0; i < 3; i++)
-            {
-                int yy = y0 + i * gap;
-                g.DrawLine(pen, x, yy, x + w, yy);
-                int knob = x + (i == 0 ? w / 3 : (i == 1 ? (2 * w) / 3 : w / 2));
-                g.FillEllipse(brush, knob - 2, yy - 2, 4, 4);
-            }
-        }
     }
 
     public static void DrawSectionTitle(Graphics g, Font font, string title, int x, int y, int inner, Color muted)
@@ -236,43 +179,15 @@ internal sealed class QuickActions
         }
     }
 
-    public static void DrawSlider(Graphics g, Rectangle track, float value01, Color trackColor, Color fillColor, out Rectangle thumb)
-    {
-        thumb = Rectangle.Empty;
-        if (g == null)
-        {
-            int tw = Math.Max(8, track.Height + 4);
-            int tx = track.X + (int)((track.Width - tw) * value01);
-            thumb = new Rectangle(tx, track.Y - 2, tw, track.Height + 4);
-            return;
-        }
-        using (GraphicsPath path = Round(track, track.Height / 2))
-        using (SolidBrush brush = new SolidBrush(trackColor))
-            g.FillPath(brush, path);
-        int fillW = (int)Math.Round(track.Width * value01);
-        if (fillW > 0)
-        {
-            Rectangle fill = new Rectangle(track.X, track.Y, Math.Max(fillW, track.Height), track.Height);
-            if (fill.Width > track.Width) fill.Width = track.Width;
-            using (GraphicsPath path = Round(fill, track.Height / 2))
-            using (SolidBrush brush = new SolidBrush(fillColor))
-                g.FillPath(brush, path);
-        }
-        int thumbW = Math.Max(10, track.Height + 2);
-        int thumbX = track.X + (int)Math.Round((track.Width - thumbW) * value01);
-        thumb = new Rectangle(thumbX, track.Y - 3, thumbW, track.Height + 6);
-        using (SolidBrush brush = new SolidBrush(Color.FromArgb(255, 226, 230, 236)))
-            g.FillEllipse(brush, thumb);
-    }
-
     /// <summary>
     /// HyperOS-style brightness block: rounded capsule, left fill by value, no thumb.
+    /// Radius and min-fill follow the block size (no raw device-pixel floors).
     /// </summary>
     public static void DrawFillBlock(Graphics g, Rectangle block, float value01, Color trackColor, Color fillColor)
     {
         if (value01 < 0f) value01 = 0f;
         if (value01 > 1f) value01 = 1f;
-        int radius = Math.Max(8, block.Height / 2);
+        int radius = Math.Max(1, Math.Min(block.Width, block.Height) / 2);
         if (g == null)
             return;
         using (GraphicsPath path = Round(block, radius))
@@ -281,8 +196,10 @@ internal sealed class QuickActions
         int fillW = (int)Math.Round(block.Width * value01);
         if (fillW <= 0)
             return;
-        // Keep a pill end so low values still read as a rounded fill.
-        int minFill = Math.Min(block.Width, Math.Max(radius, block.Height));
+        // Pill end for low values, but never more than half the track.
+        int minFill = Math.Min(block.Width / 2, Math.Max(radius, block.Height));
+        if (minFill < 1)
+            minFill = 1;
         if (fillW < minFill)
             fillW = minFill;
         if (fillW > block.Width)
@@ -300,7 +217,7 @@ internal sealed class QuickActions
     {
         if (value01 < 0f) value01 = 0f;
         if (value01 > 1f) value01 = 1f;
-        int radius = Math.Max(8, block.Width / 2);
+        int radius = Math.Max(1, Math.Min(block.Width, block.Height) / 2);
         if (g == null)
             return;
         using (GraphicsPath path = Round(block, radius))
@@ -309,7 +226,10 @@ internal sealed class QuickActions
         int fillH = (int)Math.Round(block.Height * value01);
         if (fillH <= 0)
             return;
-        int minFill = Math.Min(block.Height, Math.Max(radius, block.Width));
+        // Cap min fill so a short track does not look "stuck" loud at low volume.
+        int minFill = Math.Min(block.Height / 2, Math.Max(radius, block.Width / 2));
+        if (minFill < 1)
+            minFill = 1;
         if (fillH < minFill)
             fillH = minFill;
         if (fillH > block.Height)

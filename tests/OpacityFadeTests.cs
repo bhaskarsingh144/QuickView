@@ -26,18 +26,19 @@ internal static class OpacityFadeTests
             Console.WriteLine("  FAIL  ease 0.25 below linear");
         }
 
-        ExpectDouble(OpacityFade.Normal, OpacityFade.OpacityAt(OpacityFade.Normal, OpacityFade.Preview, 0, OpacityFade.FadeOutMs), 0.0001, "fade start = from");
-        ExpectDouble(OpacityFade.Preview, OpacityFade.OpacityAt(OpacityFade.Normal, OpacityFade.Preview, OpacityFade.FadeOutMs, OpacityFade.FadeOutMs), 0.0001, "fade end = to");
-        double mid = OpacityFade.OpacityAt(OpacityFade.Normal, OpacityFade.Preview, OpacityFade.FadeOutMs / 2, OpacityFade.FadeOutMs);
-        if (mid < OpacityFade.Normal && mid > OpacityFade.Preview)
+        // Production path: PanelForm dims PanelNormal → Preview (not drawer Normal).
+        ExpectDouble(OpacityFade.PanelNormal, OpacityFade.OpacityAt(OpacityFade.PanelNormal, OpacityFade.Preview, 0, OpacityFade.FadeOutMs), 0.0001, "panel fade-out start");
+        ExpectDouble(OpacityFade.Preview, OpacityFade.OpacityAt(OpacityFade.PanelNormal, OpacityFade.Preview, OpacityFade.FadeOutMs, OpacityFade.FadeOutMs), 0.0001, "panel fade-out end");
+        double mid = OpacityFade.OpacityAt(OpacityFade.PanelNormal, OpacityFade.Preview, OpacityFade.FadeOutMs / 2, OpacityFade.FadeOutMs);
+        if (mid < OpacityFade.PanelNormal && mid > OpacityFade.Preview)
         {
             _passed++;
-            Console.WriteLine("  PASS  fade mid between ends");
+            Console.WriteLine("  PASS  panel fade-out mid between ends");
         }
         else
         {
             _failed++;
-            Console.WriteLine("  FAIL  fade mid between ends: {0}", mid);
+            Console.WriteLine("  FAIL  panel fade-out mid between ends: {0}", mid);
         }
 
         if (!OpacityFade.FadeComplete(0, 160)) { Pass("not complete at start"); } else { Fail("not complete at start"); }
@@ -51,27 +52,20 @@ internal static class OpacityFadeTests
         if (OpacityFade.IdleElapsed(deadline, deadline)) { Pass("idle at deadline"); } else { Fail("idle at deadline"); }
         if (OpacityFade.IdleElapsed(deadline.AddMilliseconds(1), deadline)) { Pass("idle after deadline"); } else { Fail("idle after deadline"); }
 
-        // Floor is 0.35 × 1.35 × 1.35 — soft peek; panel stays clearly readable.
         ExpectDouble(0.637875, OpacityFade.Preview, 0.0001, "preview opacity floor");
         if (OpacityFade.Preview > 0.55 && OpacityFade.Preview < OpacityFade.PanelNormal)
             Pass("preview between readable and panel normal");
         else
             Fail("preview between readable and panel normal");
-        if (OpacityFade.Normal > 0.9) { Pass("normal near opaque"); } else { Fail("normal near opaque"); }
+        if (OpacityFade.Normal > 0.9) { Pass("drawer normal near opaque"); } else { Fail("drawer normal near opaque"); }
         if (OpacityFade.PanelNormal > 0.9 && OpacityFade.PanelNormal < OpacityFade.Normal)
             Pass("panel normal slightly below drawer normal");
         else
             Fail("panel normal slightly below drawer normal");
         ExpectDouble(OpacityFade.PanelNormal, OpacityFade.OpacityAt(OpacityFade.Preview, OpacityFade.PanelNormal, OpacityFade.FadeInMs, OpacityFade.FadeInMs), 0.0001, "fade in ends at PanelNormal");
 
-        if (OpacityFade.DrawerShowMs > 0 && OpacityFade.DrawerShowMs <= 150)
-            Pass("drawer show fade is snappy");
-        else
-            Fail("drawer show fade is snappy");
-        if (OpacityFade.DrawerShowFrom > 0.1 && OpacityFade.DrawerShowFrom < OpacityFade.Normal)
-            Pass("drawer show starts below normal");
-        else
-            Fail("drawer show starts below normal");
+        Expect(90, OpacityFade.DrawerShowMs, "drawer show ms pinned");
+        ExpectDouble(0.28, OpacityFade.DrawerShowFrom, 0.0001, "drawer show from pinned");
         ExpectDouble(OpacityFade.Normal, OpacityFade.OpacityAt(OpacityFade.DrawerShowFrom, OpacityFade.Normal, OpacityFade.DrawerShowMs, OpacityFade.DrawerShowMs), 0.0001, "drawer show ends at Normal");
 
         Console.WriteLine();

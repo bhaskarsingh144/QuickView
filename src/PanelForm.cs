@@ -39,6 +39,7 @@ internal sealed class PanelForm : Form
     private Font _fontValue;
     private Font _fontRate;
     private Font _fontLevel;
+    private Font _fontVolLevel;
     private Font _fontBattery;
     private Snapshot _snap = Snapshot.Empty();
     private DetailMode _detail = DetailMode.None;
@@ -73,7 +74,6 @@ internal sealed class PanelForm : Form
     private const int DrawerLeaveMs = 280;
     private bool _wifiHot;
     private Rectangle _chevronHit;
-    private QuickHit _hover = QuickHit.None;
     private bool _chipHoverCpu;
     private bool _chipHoverMem;
     private bool _chipHoverGpu;
@@ -89,11 +89,12 @@ internal sealed class PanelForm : Form
     private Rectangle _batteryHit;
     private bool _batteryHot;
     private Rectangle _brightTrack;
-    private Rectangle _brightThumb;
     private string _brightId = "";
     private bool _brightDragging;
     private bool _brightHover;
     private Rectangle _volTrack;
+    /// <summary>Fill segment of the volume column (badge sits above this).</summary>
+    private Rectangle _volFill;
     private bool _volDragging;
     private bool _volHover;
     private float _volume01;
@@ -204,6 +205,8 @@ internal sealed class PanelForm : Form
             _fontRate.Dispose();
         if (_fontLevel != null)
             _fontLevel.Dispose();
+        if (_fontVolLevel != null)
+            _fontVolLevel.Dispose();
         if (_fontBattery != null)
             _fontBattery.Dispose();
         Application.RemoveMessageFilter(_wheel);
@@ -272,14 +275,17 @@ internal sealed class PanelForm : Form
         Font oldValue = _fontValue;
         Font oldRate = _fontRate;
         Font oldLevel = _fontLevel;
+        Font oldVolLevel = _fontVolLevel;
         Font oldBattery = _fontBattery;
         _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
         _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
         // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
-        // ~35% larger than the original 10.5pt so Wi-Fi + rates read clearly in the header.
-        _fontRate = CreateMetricFont(14.2f * text);
-        _fontLevel = CreateMetricFont(11f * text);
-        _fontBattery = CreateMetricFont(12f * text);
+        // Modest metric face — large enough to read, small enough that the cluster stays stable.
+        _fontRate = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.RateFontPt, text));
+        _fontLevel = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.LevelFontPt, text));
+        // Narrow volume column — smaller digits, but never below the readable metric floor.
+        _fontVolLevel = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.VolLevelFontPt, text));
+        _fontBattery = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.BatteryFontPt, text));
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
@@ -289,6 +295,8 @@ internal sealed class PanelForm : Form
             oldRate.Dispose();
         if (oldLevel != null)
             oldLevel.Dispose();
+        if (oldVolLevel != null)
+            oldVolLevel.Dispose();
         if (oldBattery != null)
             oldBattery.Dispose();
     }
@@ -327,15 +335,12 @@ internal sealed class PanelForm : Form
 
     private float FontEm()
     {
-        float t = Fit() * _textFit;
-        if (t < 0.55f)
-            t = 0.55f;
-        return t;
+        return ChromeLayout.FontEm(Fit(), _textFit);
     }
 
     private int Px(int dip)
     {
-        return (int)Math.Round(dip * _dpi / 96f * Fit());
+        return ChromeLayout.Px(dip, _dpi, Fit());
     }
 
     private int MaxHeight()
@@ -352,12 +357,12 @@ internal sealed class PanelForm : Form
 
     private int ContentInner()
     {
-        return Px(380) - Px(32) - _gutter;
+        return ChromeLayout.ContentInnerPx(_dpi, Fit(), _gutter);
     }
 
     private void ApplySize()
     {
-        int w = Px(380);
+        int w = Px(ChromeLayout.PanelWidthDip);
         _gutter = 0;
         _headH = Chrome(null);
         _docH = Body(null, _headH);
@@ -677,9 +682,9 @@ internal sealed class PanelForm : Form
         int x = Px(16);
         int y = Px(14);
         int inner = ContentInner();
-        int volW = Px(28);
-        int gap = Px(8);
-        int mainW = Math.Max(Px(120), inner - volW - gap);
+        int volW = Px(ChromeLayout.VolWidthDip);
+        int gap = Px(ChromeLayout.VolMainGapDip);
+        int mainW = Math.Max(Px(ChromeLayout.MainMinWidthDip), inner - volW - gap);
         int y0 = y;
         y = Header(g, x, y, mainW);
         int afterHeader = y;
@@ -687,15 +692,19 @@ internal sealed class PanelForm : Form
         int volBottom = FirstControllableBrightness() != null
             ? y - Px(10)
             : afterHeader - Px(14);
-        if (volBottom < y0 + Px(40))
-            volBottom = y0 + Px(40);
-        _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(40), volBottom - y0));
+        if (volBottom < y0 + Px(ChromeLayout.VolMinHeightDip))
+            volBottom = y0 + Px(ChromeLayout.VolMinHeightDip);
+        // Full column hit; shorten fill from the top so the speaker sits above the track.
+        _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(ChromeLayout.VolMinHeightDip), volBottom - y0));
+        ChromeLayout.VolumeColumnGeom vol = ChromeLayout.LayoutVolumeColumnForDisplay(
+            _volTrack.Width, _volTrack.Height, _dpi, Fit());
+        _volFill = new Rectangle(_volTrack.X, _volTrack.Y + vol.BadgeHeight, _volTrack.Width, vol.FillHeight);
         if (g != null)
-            DrawVolumeColumn(g);
+            DrawVolumeColumn(g, vol);
         return Chips(g, x, y, inner);
     }
 
-    private void DrawVolumeColumn(Graphics g)
+    private void DrawVolumeColumn(Graphics g, ChromeLayout.VolumeColumnGeom vol)
     {
         if (_volTrack.Width < 1 || _volTrack.Height < 1)
             return;
@@ -705,17 +714,48 @@ internal sealed class PanelForm : Form
         float v = _volumeKnown ? _volume01 : 0f;
         if (_volumeMuted)
             v = 0f;
-        QuickActions.DrawFillBlockVertical(g, _volTrack, v, back, UiTheme.Accent);
-        int pct = _volumeKnown ? (int)Math.Round(v * 100f) : 0;
         bool muted = !_volumeKnown || _volumeMuted;
-        DrawLevelBadge(g, _volTrack, pct.ToString(), _fontLevel, true,
-            delegate(Graphics gg, Rectangle r, Color ink) { QuickActions.GlyphSpeaker(gg, r, ink, muted); });
+        int icon = vol.IconSize;
+        int badgeH = vol.BadgeHeight;
+        if (icon > 0 && badgeH > 0)
+        {
+            Rectangle iconRect = new Rectangle(
+                _volTrack.X + (_volTrack.Width - icon) / 2,
+                _volTrack.Y + Math.Max(0, (badgeH - icon) / 2),
+                icon,
+                icon);
+            QuickActions.GlyphSpeaker(g, iconRect, TextMain, muted);
+        }
+        if (_volFill.Height > 0)
+        {
+            QuickActions.DrawFillBlockVertical(g, _volFill, v, back, UiTheme.Accent);
+            // Level digits stay inside the fill — icon only is above.
+            int pct = _volumeKnown ? (int)Math.Round((_volumeMuted ? 0f : _volume01) * 100f) : 0;
+            DrawLevelDigits(g, _volFill, pct.ToString(), _fontVolLevel ?? _fontLevel);
+        }
+    }
+
+    /// <summary>Centered level digits only (no identity glyph) — used inside the volume fill.</summary>
+    private void DrawLevelDigits(Graphics g, Rectangle bounds, string text, Font font)
+    {
+        if (font == null || string.IsNullOrEmpty(text))
+            return;
+        using (StringFormat fmt = new StringFormat())
+        {
+            fmt.Alignment = StringAlignment.Center;
+            fmt.LineAlignment = StringAlignment.Center;
+            fmt.FormatFlags = StringFormatFlags.NoWrap;
+            using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
+                g.DrawString(text, font, shadow,
+                    new Rectangle(bounds.X + 1, bounds.Y + 1, bounds.Width, bounds.Height), fmt);
+            using (SolidBrush brush = new SolidBrush(TextMain))
+                g.DrawString(text, font, brush, bounds, fmt);
+        }
     }
 
     private int BrightnessStrip(Graphics g, int x, int y, int inner)
     {
         _brightTrack = Rectangle.Empty;
-        _brightThumb = Rectangle.Empty;
         BrightnessMonitor mon = FirstControllableBrightness();
         if (mon == null)
         {
@@ -723,9 +763,8 @@ internal sealed class PanelForm : Form
             return y;
         }
         _brightId = mon.Id ?? "";
-        // HyperOS-style fill block (~40% shorter than the first Px(56) pass).
-        int blockH = Px(34);
-        int gapBelow = Px(10);
+        int blockH = Px(ChromeLayout.BrightBlockDip);
+        int gapBelow = Px(ChromeLayout.BrightGapBelowDip);
         _brightTrack = new Rectangle(x, y, inner, blockH);
         if (g != null)
         {
@@ -736,52 +775,28 @@ internal sealed class PanelForm : Form
                 ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
                 : Track;
             QuickActions.DrawFillBlock(g, _brightTrack, v, back, UiTheme.Accent);
-            DrawLevelBadge(g, _brightTrack, mon.Percent.ToString(), _fontLevel, false, QuickActions.GlyphSun);
+            DrawBrightnessBadge(g, _brightTrack, mon.Percent.ToString(), _fontLevel);
         }
         return y + blockH + gapBelow;
     }
 
-    /// <summary>
-    /// Level digits plus identity glyph (sun / speaker), centered in the fill block.
-    /// </summary>
-    private void DrawLevelBadge(Graphics g, Rectangle bounds, string text, Font font, bool verticalStack, Action<Graphics, Rectangle, Color> glyph)
+    /// <summary>Sun + level digits centered horizontally in the brightness fill block.</summary>
+    private void DrawBrightnessBadge(Graphics g, Rectangle bounds, string text, Font font)
     {
-        if (font == null || string.IsNullOrEmpty(text) || glyph == null)
+        if (font == null || string.IsNullOrEmpty(text))
             return;
         SizeF textSize = g.MeasureString(text, font);
         int textW = (int)Math.Ceiling(textSize.Width);
         int textH = (int)Math.Ceiling(font.GetHeight());
         int gap = Px(4);
-        int icon;
-        int groupW;
-        int groupH;
-        if (verticalStack)
-        {
-            icon = Math.Min(Px(14), Math.Max(10, bounds.Width - Px(8)));
-            groupW = Math.Max(icon, textW);
-            groupH = icon + gap + textH;
-        }
-        else
-        {
-            icon = Math.Min(Px(14), Math.Max(10, bounds.Height - Px(8)));
-            groupW = icon + gap + textW;
-            groupH = Math.Max(icon, textH);
-        }
+        int icon = Math.Min(Px(14), Math.Max(Px(10), bounds.Height - Px(8)));
+        int groupW = icon + gap + textW;
+        int groupH = Math.Max(icon, textH);
         int left = bounds.X + Math.Max(0, (bounds.Width - groupW) / 2);
         int top = bounds.Y + Math.Max(0, (bounds.Height - groupH) / 2);
-        Rectangle iconRect;
-        Rectangle textRect;
-        if (verticalStack)
-        {
-            iconRect = new Rectangle(left + (groupW - icon) / 2, top, icon, icon);
-            textRect = new Rectangle(left + (groupW - textW) / 2, top + icon + gap, textW, textH);
-        }
-        else
-        {
-            iconRect = new Rectangle(left, top + (groupH - icon) / 2, icon, icon);
-            textRect = new Rectangle(left + icon + gap, top + (groupH - textH) / 2, textW, textH);
-        }
-        glyph(g, iconRect, TextMain);
+        Rectangle iconRect = new Rectangle(left, top + (groupH - icon) / 2, icon, icon);
+        Rectangle textRect = new Rectangle(left + icon + gap, top + (groupH - textH) / 2, textW, textH);
+        QuickActions.GlyphSun(g, iconRect, TextMain);
         using (StringFormat fmt = new StringFormat())
         {
             fmt.Alignment = StringAlignment.Center;
@@ -858,8 +873,8 @@ internal sealed class PanelForm : Form
 
     private int Header(Graphics g, int x, int y, int inner)
     {
-        // Room for ~35% larger network cluster (Wi-Fi square tracks rate stack height).
-        int row = Px(56);
+        // Compact header row — network rates + Wi-Fi fit without dominating the drawer hit.
+        int row = Px(ChromeLayout.HeaderRowDip);
         if (g != null)
         {
             DrawStatus(g, x, y, inner, row);
@@ -879,15 +894,15 @@ internal sealed class PanelForm : Form
         if (g == null)
             return;
 
-        int gap = Px(6);
+        int gap = Px(ChromeLayout.HeaderGapDip);
         int right = x + inner;
         int padY = Px(4);
-        int chevReserve = Math.Max(Px(44), row); // minimum left zone before network
+        int chevReserve = Math.Max(Px(ChromeLayout.ChevronReserveMinDip), row); // minimum left zone before network
 
         // 1) Battery flush right
         int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
         int battLeft = _snap.BatteryKnown ? right - battW : right;
-        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
+        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(ChromeLayout.HeaderMidGapDip) : right;
 
         // 2) Measure network; right-align against battery
         NetworkCluster net = MeasureNetworkCluster(g, row);
@@ -937,6 +952,7 @@ internal sealed class PanelForm : Form
         public int RowGap;
         public int ClusterGap;
         public int ArrowColW;
+        public int RateTextW;
         public string DownSpeed;
         public string UpSpeed;
         public Font RateFont;
@@ -951,33 +967,33 @@ internal sealed class PanelForm : Form
         net.UpSpeed = up.ToString("0.00") + " MB/s";
         const string ArrowDown = "\u2193";
         const string ArrowUp = "\u2191";
+        // Fixed sample so digit changes (0.09 → 12.34) do not resize the cluster / drawer hit.
+        string rateSample = ChromeLayout.NetworkRateSample;
         net.RateFont = _fontRate ?? _fontLabel;
-        net.LineH = Math.Max(Px(14), (int)Math.Ceiling(net.RateFont.GetHeight()));
-        net.RowGap = Math.Max(2, Px(3));
+        net.LineH = Math.Max(Px(12), (int)Math.Ceiling(net.RateFont.GetHeight()));
+        net.RowGap = Math.Max(1, Px(2));
         SizeF arrowDownSize;
         SizeF arrowUpSize;
-        SizeF dSize;
-        SizeF uSize;
+        SizeF sampleSize;
         using (StringFormat measure = new StringFormat(StringFormat.GenericTypographic))
         {
             measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
             arrowDownSize = g.MeasureString(ArrowDown, net.RateFont, int.MaxValue, measure);
             arrowUpSize = g.MeasureString(ArrowUp, net.RateFont, int.MaxValue, measure);
-            dSize = g.MeasureString(net.DownSpeed, net.RateFont, int.MaxValue, measure);
-            uSize = g.MeasureString(net.UpSpeed, net.RateFont, int.MaxValue, measure);
+            sampleSize = g.MeasureString(rateSample, net.RateFont, int.MaxValue, measure);
         }
-        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(5);
-        int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
-        int rateColW = net.ArrowColW + textW;
+        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
+        net.RateTextW = (int)Math.Ceiling(sampleSize.Width) + Px(2);
+        int rateColW = net.ArrowColW + net.RateTextW;
         net.RatesH = net.LineH * 2 + net.RowGap;
-        int maxSide = row - Px(4);
+        int maxSide = row - Px(6);
         if (net.RatesH > maxSide)
         {
-            net.LineH = Math.Max(Px(12), (maxSide - net.RowGap) / 2);
+            net.LineH = Math.Max(Px(10), (maxSide - net.RowGap) / 2);
             net.RatesH = net.LineH * 2 + net.RowGap;
         }
         net.Wifi = net.RatesH;
-        net.ClusterGap = Px(8);
+        net.ClusterGap = Px(6);
         net.Width = net.Wifi + net.ClusterGap + rateColW;
         return net;
     }
@@ -989,8 +1005,10 @@ internal sealed class PanelForm : Form
         DrawWifi(g, new Rectangle(wifiLeft, clusterTop, net.Wifi, net.Wifi),
             _snap.WifiUp || _snap.NetKnown, true);
         int ratesX = wifiLeft + net.Wifi + net.ClusterGap;
-        DrawNetworkRateRow(g, ratesX, clusterTop, net.LineH, net.ArrowColW, ArrowDown, net.DownSpeed, net.RateFont, UiTheme.Down);
-        DrawNetworkRateRow(g, ratesX, clusterTop + net.LineH + net.RowGap, net.LineH, net.ArrowColW, ArrowUp, net.UpSpeed, net.RateFont, UiTheme.Up);
+        DrawNetworkRateRow(g, ratesX, clusterTop, net.LineH, net.ArrowColW, net.RateTextW,
+            ArrowDown, net.DownSpeed, net.RateFont, UiTheme.Down);
+        DrawNetworkRateRow(g, ratesX, clusterTop + net.LineH + net.RowGap, net.LineH, net.ArrowColW, net.RateTextW,
+            ArrowUp, net.UpSpeed, net.RateFont, UiTheme.Up);
     }
 
     /// <summary>
@@ -1055,18 +1073,12 @@ internal sealed class PanelForm : Form
 
     private int EstimateBatteryWidth(Graphics g)
     {
-        string percent = _snap.BatteryPercent + "%";
         Font battFont = _fontBattery ?? _fontValue;
-        SizeF size = g.MeasureString(percent, battFont);
-        int icons = 0;
-        if ((_snap.AcKnown && _snap.PluggedIn) || (_snap.AcKnown && !_snap.PluggedIn))
-            icons++;
-        if (_snap.Charging)
-            icons++;
-        if (icons < 1)
-            icons = 1;
-        // Extra slack — GDI+ MeasureString under-reports slightly vs DrawString.
-        return (int)Math.Ceiling(size.Width) + icons * (Px(14) + Px(4)) + Px(8);
+        // Fixed slot (100% + icon pair) so 9%→100% and plug/bolt changes do not twitch the header.
+        SizeF size = g.MeasureString("100%", battFont);
+        int icon = Px(ChromeLayout.BatteryIconDip);
+        int gap = Px(ChromeLayout.BatteryIconGapDip);
+        return (int)Math.Ceiling(size.Width) + 2 * (icon + gap) + Px(ChromeLayout.BatterySlotPadDip);
     }
 
     private void DrawHeaderBatteryLeft(Graphics g, int x, int y, int row, int rightLimit)
@@ -1076,9 +1088,21 @@ internal sealed class PanelForm : Form
         bool plug = _snap.AcKnown && _snap.PluggedIn;
         bool cell = _snap.AcKnown && !_snap.PluggedIn;
         bool bolt = _snap.Charging;
-        int s = Px(14);
-        int gap = Px(4);
-        int cursor = x;
+        int s = Px(ChromeLayout.BatteryIconDip);
+        int gap = Px(ChromeLayout.BatteryIconGapDip);
+        int slot = EstimateBatteryWidth(g);
+        if (x + slot > rightLimit)
+            slot = Math.Max(Px(40), rightLimit - x);
+        // Center the icon+% group inside the fixed slot (symmetric in the battery hit).
+        SizeF pctSize = g.MeasureString(percent, battFont);
+        int pctW = (int)Math.Ceiling(pctSize.Width) + Px(1);
+        int iconsW = 0;
+        if (plug || cell)
+            iconsW += s + gap;
+        if (bolt)
+            iconsW += s + gap;
+        int groupW = iconsW + pctW;
+        int cursor = x + Math.Max(0, (slot - groupW) / 2);
         int gy = y + (row - s) / 2;
         if (plug)
         {
@@ -1095,10 +1119,6 @@ internal sealed class PanelForm : Form
             DrawBolt(g, new Rectangle(cursor, gy, s, s), TextMuted);
             cursor += s + gap;
         }
-        SizeF size = g.MeasureString(percent, battFont);
-        int valueW = (int)Math.Ceiling(size.Width) + Px(2);
-        if (cursor + valueW > rightLimit)
-            valueW = Math.Max(Px(28), rightLimit - cursor);
         using (SolidBrush brush = new SolidBrush(TextMain))
         using (StringFormat fmt = new StringFormat())
         {
@@ -1106,7 +1126,7 @@ internal sealed class PanelForm : Form
             fmt.LineAlignment = StringAlignment.Center;
             fmt.FormatFlags = StringFormatFlags.NoWrap;
             fmt.Trimming = StringTrimming.None;
-            g.DrawString(percent, battFont, brush, new Rectangle(cursor, y, valueW, row), fmt);
+            g.DrawString(percent, battFont, brush, new Rectangle(cursor, y, pctW, row), fmt);
         }
     }
 
@@ -1155,12 +1175,13 @@ internal sealed class PanelForm : Form
 
     /// <summary>
     /// One rate line: arrow and speed share the same font + LineAlignment so they sit on one baseline.
-    /// Fixed arrow column keeps ↓/↑ numbers vertically column-aligned.
+    /// Fixed arrow + rate text columns keep ↓/↑ aligned and stop width twitch as digits change.
     /// </summary>
-    private static void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int arrowColW, string arrow, string speed, Font font, Color color)
+    private static void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int arrowColW, int rateTextW,
+        string arrow, string speed, Font font, Color color)
     {
         Rectangle arrowRect = new Rectangle(x, y, arrowColW, lineH);
-        Rectangle textRect = new Rectangle(x + arrowColW, y, 240, lineH);
+        Rectangle textRect = new Rectangle(x + arrowColW, y, rateTextW, lineH);
         using (SolidBrush brush = new SolidBrush(color))
         using (StringFormat arrowFmt = new StringFormat(StringFormat.GenericTypographic))
         using (StringFormat textFmt = new StringFormat(StringFormat.GenericTypographic))
@@ -1197,58 +1218,42 @@ internal sealed class PanelForm : Form
 
     private int Resting(Graphics g, int x, int y, int inner)
     {
+        // Glance only: CPU + Memory. GPU / Disk live behind metric chips.
         y = CpuSection(g, x, y, inner);
-        y = MemorySection(g, x, y, inner);
-        y = DiskSection(g, x, y, inner);
-        return GpuSection(g, x, y, inner);
+        return MemorySection(g, x, y, inner);
     }
 
     private int CpuSection(Graphics g, int x, int y, int inner)
     {
-        y = Heading(g, x, y, inner, "CPU", false, _snap.CpuTempKnown, _snap.CpuCelsius);
-        y = Graph(g, x, y, inner, _snap.CpuHistory, Cpu, false);
-        y = Fact(g, x, y, inner, "Usage", _snap.CpuKnown ? Percent(_snap.CpuPercent) : "--");
-        y = ProcessorFacts(g, x, y, inner);
+        string pct = _snap.CpuKnown ? Percent(_snap.CpuPercent) : "--";
+        y = RestingGraph(g, x, y, inner, _snap.CpuHistory, Cpu, "CPU", pct,
+            _snap.CpuTempKnown, _snap.CpuCelsius);
+        y = ProcessorSection(g, x, y, inner);
         if (_snap.ClockKnown)
-            y = Fact(g, x, y, inner, "Clock", FormatGHz(_snap.ClockMHz));
+            y = RestingFact(g, x, y, inner, "Clock", FormatGHz(_snap.ClockMHz));
         if (_snap.CoreMHz != null && _snap.CoreMHz.Length > 0)
         {
             y = Caption(g, x, y, "Cores");
             y = CoreGrid(g, x, y, inner, _snap.CoreMHz);
         }
-        return y;
+        return y + Px(6);
     }
 
     private int MemorySection(Graphics g, int x, int y, int inner)
     {
-        y = Heading(g, x, y, inner, "Memory", true, _snap.MemTempKnown, _snap.MemCelsius);
-        y = Graph(g, x, y, inner, _snap.MemoryHistory, Mem, true);
+        string pct = "--";
         if (_snap.MemoryTotal > 0)
-            y = Fact(g, x, y, inner, "In use", FormatBytes(_snap.MemoryUsed) + " of " + FormatBytes(_snap.MemoryTotal));
+            pct = Percent(100f * (float)_snap.MemoryUsed / (float)_snap.MemoryTotal);
+        y = RestingGraph(g, x, y, inner, _snap.MemoryHistory, Mem, "Memory", pct,
+            _snap.MemTempKnown, _snap.MemCelsius);
+        if (_snap.MemoryTotal > 0)
+            y = RestingFact(g, x, y, inner, "In use", FormatBytes(_snap.MemoryUsed) + " of " + FormatBytes(_snap.MemoryTotal));
         if (_snap.CommitKnown)
-            y = Fact(g, x, y, inner, "Committed", FormatBytes(_snap.Committed) + " / " + FormatBytes(_snap.CommitLimit));
+            y = RestingFact(g, x, y, inner, "Committed", FormatBytes(_snap.Committed) + " / " + FormatBytes(_snap.CommitLimit));
         if (_snap.CachedKnown)
-            y = Fact(g, x, y, inner, "Cached", FormatBytes(_snap.Cached));
-        if (_snap.PoolKnown)
-        {
-            y = Fact(g, x, y, inner, "Paged pool", FormatBytes(_snap.PagedPool));
-            y = Fact(g, x, y, inner, "Nonpaged pool", FormatBytes(_snap.NonPagedPool));
-        }
+            y = RestingFact(g, x, y, inner, "Cached", FormatBytes(_snap.Cached));
+        // Pools stay on Memory detail (chip view).
         return ModuleFacts(g, x, y, inner);
-    }
-
-    private int GpuSection(Graphics g, int x, int y, int inner)
-    {
-        y = Heading(g, x, y, inner, "GPU", true, _snap.GpuTempKnown, _snap.GpuCelsius);
-        if (!_snap.GpuKnown)
-            return Fact(g, x, y, inner, "GPU", "Counters are not available");
-        y = Fact(g, x, y, inner, "Usage", Percent(_snap.GpuPercent));
-        y = Graph(g, x, y, inner, _snap.GpuHistory, Gpu, true);
-        if (_snap.GpuMemoryKnown)
-            y = Fact(g, x, y, inner, "Dedicated", FormatBytes(_snap.GpuMemoryUsed));
-        if (_snap.GpuSharedKnown)
-            y = Fact(g, x, y, inner, "Shared", FormatBytes(_snap.GpuShared));
-        return y;
     }
 
     private int CpuDetail(Graphics g, int x, int y, int inner)
@@ -1312,23 +1317,6 @@ internal sealed class PanelForm : Form
             y = Fact(g, x, y, inner, "Dedicated", FormatBytes(_snap.GpuMemoryUsed));
         if (_snap.GpuSharedKnown)
             y = Fact(g, x, y, inner, "Shared", FormatBytes(_snap.GpuShared));
-        return y;
-    }
-
-    private int DiskSection(Graphics g, int x, int y, int inner)
-    {
-        y = Heading(g, x, y, inner, "Disk", true);
-        if (!_snap.DiskKnown && !_snap.DiskSpaceKnown)
-            return Fact(g, x, y, inner, "Disk", "Counters are not available");
-        if (_snap.DiskKnown)
-            y = Graph(g, x, y, inner, _snap.DiskHistory, TextMain, true);
-        if (_snap.DiskSpaceKnown)
-            y = Fact(g, x, y, inner, "In use", FormatBytes(_snap.DiskUsed) + " of " + FormatBytes(_snap.DiskTotal));
-        if (_snap.DiskKnown)
-        {
-            y = Fact(g, x, y, inner, "Read", FormatRate(_snap.DiskReadMBps));
-            y = Fact(g, x, y, inner, "Write", FormatRate(_snap.DiskWriteMBps));
-        }
         return y;
     }
 
@@ -1407,35 +1395,6 @@ internal sealed class PanelForm : Form
         if (celsius >= 70)
             return TempWarm;
         return TempCool;
-    }
-
-    private int ProcessorFacts(Graphics g, int x, int y, int inner)
-    {
-        bool named = !string.IsNullOrEmpty(_snap.CpuName);
-        bool cores = _snap.CpuCores > 0 && _snap.CpuThreads > 0;
-        bool rated = _snap.CpuMaxMHz > 0 && _snap.CpuL3Kb > 0;
-        if (!named && !cores && !rated)
-            return y;
-        if (named)
-        {
-            if (g != null)
-            {
-                using (SolidBrush brush = new SolidBrush(TextMain))
-                using (StringFormat fmt = CenterFormat())
-                {
-                    Rectangle box = new Rectangle(x, y, inner, _textH);
-                    g.DrawString(_snap.CpuName, _fontValue, brush, box, fmt);
-                }
-            }
-            y += _textH + Px(8);
-        }
-        int gap = Px(16);
-        int half = (inner - gap) / 2;
-        if (cores)
-            y = PairRow(g, x, y, half, gap, "Cores", _snap.CpuCores.ToString(), "Threads", _snap.CpuThreads.ToString());
-        if (rated)
-            y = PairRow(g, x, y, half, gap, "Rated", FormatGHz(_snap.CpuMaxMHz), "L3", FormatCache(_snap.CpuL3Kb));
-        return y;
     }
 
     private int ModuleFacts(Graphics g, int x, int y, int inner)
@@ -1545,6 +1504,14 @@ internal sealed class PanelForm : Form
         return y + _textH + Px(8);
     }
 
+    /// <summary>Tighter fact row for the compact CPU+Memory resting overview.</summary>
+    private int RestingFact(Graphics g, int x, int y, int inner, string label, string value)
+    {
+        if (g != null)
+            TextPair(g, x, y, inner, label, value, false);
+        return y + _textH + Px(5);
+    }
+
     private int ProcessorSection(Graphics g, int x, int y, int inner)
     {
         bool named = !string.IsNullOrEmpty(_snap.CpuName);
@@ -1613,11 +1580,71 @@ internal sealed class PanelForm : Form
 
     private int Graph(Graphics g, int x, int y, int inner, float[] values, Color color, bool rangeLabel)
     {
+        return DrawGraph(g, x, y, inner, values, color, rangeLabel, null, null, false, 0, Px(12));
+    }
+
+    /// <summary>
+    /// Resting sparkline with title + current % (+ temp) in the graph chrome — no separate heading row.
+    /// </summary>
+    private int RestingGraph(Graphics g, int x, int y, int inner, float[] values, Color color,
+        string title, string percentText, bool tempKnown, int celsius)
+    {
+        return DrawGraph(g, x, y, inner, values, color, false, title, percentText, tempKnown, celsius, Px(8));
+    }
+
+    private int DrawGraph(Graphics g, int x, int y, int inner, float[] values, Color color, bool rangeLabel,
+        string title, string percentText, bool tempKnown, int celsius, int afterGap)
+    {
         int h = Px(78);
         Rectangle bounds = new Rectangle(x, y, inner, h);
+        bool chrome = !string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(percentText) || tempKnown;
         if (g != null)
         {
             FillRound(g, bounds, Px(8), Track);
+            int chromeBottom = bounds.Top + Px(4);
+            if (chrome)
+            {
+                int pad = Px(8);
+                int top = bounds.Top + Px(4);
+                int cursor = bounds.Right - pad;
+                int cluster = 0;
+                if (!string.IsNullOrEmpty(percentText))
+                {
+                    SizeF pctSize = g.MeasureString(percentText, _fontValue);
+                    int pctW = (int)Math.Ceiling(pctSize.Width);
+                    cursor -= pctW;
+                    using (SolidBrush brush = new SolidBrush(TextMain))
+                        g.DrawString(percentText, _fontValue, brush, cursor, top);
+                    cluster += pctW;
+                }
+                if (tempKnown)
+                {
+                    string tempText = celsius.ToString() + " \u00b0C";
+                    SizeF tempSize = g.MeasureString(tempText, _fontLabel);
+                    int tempW = (int)Math.Ceiling(tempSize.Width);
+                    if (cluster > 0)
+                        cursor -= Px(8);
+                    cursor -= tempW;
+                    using (SolidBrush brush = new SolidBrush(TempInk(celsius)))
+                        g.DrawString(tempText, _fontLabel, brush, cursor, top);
+                    cluster += tempW + (cluster > 0 ? Px(8) : 0);
+                }
+                if (!string.IsNullOrEmpty(title))
+                {
+                    int titleMax = Math.Max(Px(24), inner - pad * 2 - cluster - Px(8));
+                    Rectangle titleBox = new Rectangle(bounds.X + pad, top, titleMax, _textH);
+                    using (SolidBrush brush = new SolidBrush(TextMain))
+                    using (StringFormat left = new StringFormat())
+                    {
+                        left.Alignment = StringAlignment.Near;
+                        left.LineAlignment = StringAlignment.Near;
+                        left.FormatFlags = StringFormatFlags.NoWrap;
+                        left.Trimming = StringTrimming.EllipsisCharacter;
+                        g.DrawString(title, _fontLabel, brush, titleBox, left);
+                    }
+                }
+                chromeBottom = top + Math.Max(_textH, (int)Math.Ceiling(_fontValue.GetHeight()));
+            }
             if (values != null && values.Length >= 2)
             {
                 float max = 100f;
@@ -1625,6 +1652,10 @@ internal sealed class PanelForm : Form
                 float step = (bounds.Width - Px(16)) / (float)(values.Length - 1);
                 float lo = values[0];
                 float hi = values[0];
+                int topPad = chrome ? Math.Max(Px(22), chromeBottom - bounds.Top + Px(4)) : Px(12);
+                float plotH = bounds.Height - topPad - Px(8);
+                if (plotH < Px(24))
+                    plotH = Px(24);
                 for (int i = 0; i < values.Length; i++)
                 {
                     float v = values[i];
@@ -1632,10 +1663,10 @@ internal sealed class PanelForm : Form
                     if (v > max) v = max;
                     if (v < lo) lo = v;
                     if (v > hi) hi = v;
-                    float py = bounds.Bottom - Px(8) - (bounds.Height - Px(20)) * (v / max);
+                    float py = bounds.Bottom - Px(8) - plotH * (v / max);
                     pts[i] = new PointF(bounds.X + Px(8) + step * i, py);
                 }
-                int mid = bounds.Top + (bounds.Height / 2);
+                int mid = bounds.Top + topPad + (int)(plotH / 2f);
                 using (Pen grid = new Pen(Color.FromArgb(80, Line), 1f))
                     g.DrawLine(grid, bounds.Left + Px(8), mid, bounds.Right - Px(8), mid);
                 PointF[] area = new PointF[pts.Length + 2];
@@ -1650,7 +1681,7 @@ internal sealed class PanelForm : Form
                     pen.LineJoin = LineJoin.Round;
                     g.DrawLines(pen, pts);
                 }
-                if (rangeLabel)
+                if (rangeLabel && !chrome)
                 {
                     string span = ((int)Math.Round(lo)).ToString() + "-" + ((int)Math.Round(hi)).ToString() + "%";
                     SizeF size = g.MeasureString(span, _fontLabel);
@@ -1659,7 +1690,7 @@ internal sealed class PanelForm : Form
                 }
             }
         }
-        return y + h + Px(12);
+        return y + h + afterGap;
     }
 
     private int CoreGrid(Graphics g, int x, int y, int inner, int[] mhz)
@@ -2009,24 +2040,22 @@ internal sealed class PanelForm : Form
 
     private void UpdateHover(Point p, Point body)
     {
-        QuickHit prev = _hover;
         bool prevCpu = _chipHoverCpu;
         bool prevMem = _chipHoverMem;
         bool prevGpu = _chipHoverGpu;
         bool prevDisk = _chipHoverDisk;
         bool prevTrim = _trimHover;
+        bool prevWifi = _wifiHot;
+        bool prevChevron = _chevronHot;
+        bool prevBatt = _batteryHot;
+        bool prevBright = _brightHover;
+        bool prevVol = _volHover;
 
         _chipHoverCpu = _cpuChip.Contains(p);
         _chipHoverMem = _memChip.Contains(p);
         _chipHoverGpu = _gpuChip.Contains(p);
         _chipHoverDisk = _diskChip.Contains(p);
         _trimHover = _detail == DetailMode.Memory && _trimRect.Contains(body);
-        _hover = QuickHit.None;
-        bool prevWifi = _wifiHot;
-        bool prevChevron = _chevronHot;
-        bool prevBatt = _batteryHot;
-        bool prevBright = _brightHover;
-        bool prevVol = _volHover;
         _wifiHot = _wifiHit.Contains(p);
         _chevronHot = _chevronHit.Contains(p);
         _batteryHot = _batteryHit.Contains(p);
@@ -2045,7 +2074,7 @@ internal sealed class PanelForm : Form
             || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;
         Cursor = hand ? Cursors.Hand : Cursors.Default;
 
-        if (prev != _hover || prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
+        if (prevCpu != _chipHoverCpu || prevMem != _chipHoverMem || prevGpu != _chipHoverGpu
             || prevDisk != _chipHoverDisk || prevTrim != _trimHover || prevWifi != _wifiHot || prevChevron != _chevronHot
             || prevBatt != _batteryHot || prevBright != _brightHover || prevVol != _volHover)
             Invalidate();
@@ -2084,9 +2113,11 @@ internal sealed class PanelForm : Form
 
     private void ApplyPanelVolumeAt(int y)
     {
-        if (_volTrack.Height < 1 || !_volumeKnown)
+        // Map against the fill segment only — badge above is display, not the drag range.
+        Rectangle fill = _volFill.Height > 0 ? _volFill : _volTrack;
+        if (fill.Height < 1 || !_volumeKnown)
             return;
-        float v = SliderWheel.VolumeFromVerticalY(y, _volTrack.Y, _volTrack.Height);
+        float v = SliderWheel.VolumeFromVerticalY(y, fill.Y, fill.Height);
         if (_audio.TrySetVolume(v))
         {
             _volume01 = v;

@@ -70,5 +70,15 @@ Run-Suite "DisplayScaleTests" @(
     "System.Management.dll"
 )
 
+Run-Suite "ChromeLayoutTests" @(
+    (Join-Path $srcDir "DisplayScale.cs"),
+    (Join-Path $srcDir "ChromeLayout.cs"),
+    (Join-Path $testsDir "ChromeLayoutTests.cs")
+) "ChromeLayoutTests.exe" @(
+    "System.Drawing.dll",
+    "System.Windows.Forms.dll",
+    "System.Management.dll"
+)
+
 Write-Host "All test suites passed." -ForegroundColor Green
 exit 0
