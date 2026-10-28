@@ -699,11 +699,13 @@ internal sealed class PanelForm : Form
             : afterHeader - Px(14);
         if (volBottom < y0 + Px(40))
             volBottom = y0 + Px(40);
-        // Full column hit; fill is shortened from the top so icon+level sit outside the slider.
+        // Full column hit; shorten fill from the top so the speaker sits above the track.
         _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(40), volBottom - y0));
-        int badgeH = Math.Min(Px(30), Math.Max(Px(24), _volTrack.Height / 5));
+        int iconPad = Px(2);
+        int iconSize = Math.Min(Px(10), Math.Max(8, volW - Px(12)));
+        int badgeH = iconSize + iconPad * 2;
         if (badgeH > _volTrack.Height - Px(28))
-            badgeH = Math.Max(Px(20), _volTrack.Height - Px(28));
+            badgeH = Math.Max(Px(14), _volTrack.Height - Px(28));
         _volFill = new Rectangle(_volTrack.X, _volTrack.Y + badgeH, _volTrack.Width, _volTrack.Height - badgeH);
         if (g != null)
             DrawVolumeColumn(g);
@@ -720,15 +722,42 @@ internal sealed class PanelForm : Form
         float v = _volumeKnown ? _volume01 : 0f;
         if (_volumeMuted)
             v = 0f;
-        Rectangle badge = new Rectangle(_volTrack.X, _volTrack.Y, _volTrack.Width,
-            Math.Max(1, _volFill.Y - _volTrack.Y));
-        if (_volFill.Height > 0)
-            QuickActions.DrawFillBlockVertical(g, _volFill, v, back, UiTheme.Accent);
-        int pct = _volumeKnown ? (int)Math.Round((_volumeMuted ? 0f : _volume01) * 100f) : 0;
         bool muted = !_volumeKnown || _volumeMuted;
-        Font volFont = _fontVolLevel ?? _fontLevel;
-        DrawLevelBadge(g, badge, pct.ToString(), volFont, true,
-            delegate(Graphics gg, Rectangle r, Color ink) { QuickActions.GlyphSpeaker(gg, r, ink, muted); });
+        int badgeH = Math.Max(1, _volFill.Y - _volTrack.Y);
+        int icon = Math.Min(Px(10), Math.Max(8, _volTrack.Width - Px(12)));
+        if (icon > badgeH - Px(2))
+            icon = Math.Max(6, badgeH - Px(2));
+        Rectangle iconRect = new Rectangle(
+            _volTrack.X + (_volTrack.Width - icon) / 2,
+            _volTrack.Y + Math.Max(0, (badgeH - icon) / 2),
+            icon,
+            icon);
+        QuickActions.GlyphSpeaker(g, iconRect, TextMain, muted);
+        if (_volFill.Height > 0)
+        {
+            QuickActions.DrawFillBlockVertical(g, _volFill, v, back, UiTheme.Accent);
+            // Level digits stay inside the fill — icon only is above.
+            int pct = _volumeKnown ? (int)Math.Round((_volumeMuted ? 0f : _volume01) * 100f) : 0;
+            DrawLevelDigits(g, _volFill, pct.ToString(), _fontVolLevel ?? _fontLevel);
+        }
+    }
+
+    /// <summary>Centered level digits only (no identity glyph) — used inside the volume fill.</summary>
+    private void DrawLevelDigits(Graphics g, Rectangle bounds, string text, Font font)
+    {
+        if (font == null || string.IsNullOrEmpty(text))
+            return;
+        using (StringFormat fmt = new StringFormat())
+        {
+            fmt.Alignment = StringAlignment.Center;
+            fmt.LineAlignment = StringAlignment.Center;
+            fmt.FormatFlags = StringFormatFlags.NoWrap;
+            using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
+                g.DrawString(text, font, shadow,
+                    new Rectangle(bounds.X + 1, bounds.Y + 1, bounds.Width, bounds.Height), fmt);
+            using (SolidBrush brush = new SolidBrush(TextMain))
+                g.DrawString(text, font, brush, bounds, fmt);
+        }
     }
 
     private int BrightnessStrip(Graphics g, int x, int y, int inner)

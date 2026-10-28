@@ -45,7 +45,7 @@ Live CPU and memory at a glance on the resting panel — GPU and disk behind met
 - Compact **battery** percent in a fixed slot (semibold metric face) with charging indicator
 - Click network → Windows network settings · Click battery → power options
 - **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling
-- **Volume** column — speaker + level above a shortened vertical fill; drag or scroll ±1% (no dim)
+- **Volume** column — speaker above a shortened fill, level digits inside; drag or scroll ±1% (no dim)
 
 ### Quick settings drawer
 
