@@ -757,7 +757,9 @@ internal sealed class PanelForm : Form
         int groupH;
         if (verticalStack)
         {
-            icon = Math.Min(Px(14), Math.Max(10, bounds.Width - Px(8)));
+            // Narrow volume column — speaker is a solid glyph; keep it smaller than the sun on brightness.
+            gap = Px(3);
+            icon = Math.Min(Px(10), Math.Max(8, bounds.Width - Px(14)));
             groupW = Math.Max(icon, textW);
             groupH = icon + gap + textH;
         }
