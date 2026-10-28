@@ -39,6 +39,7 @@ internal sealed class PanelForm : Form
     private Font _fontValue;
     private Font _fontRate;
     private Font _fontLevel;
+    private Font _fontBattery;
     private Snapshot _snap = Snapshot.Empty();
     private DetailMode _detail = DetailMode.None;
     private bool _shown;
@@ -200,6 +201,8 @@ internal sealed class PanelForm : Form
             _fontRate.Dispose();
         if (_fontLevel != null)
             _fontLevel.Dispose();
+        if (_fontBattery != null)
+            _fontBattery.Dispose();
         Application.RemoveMessageFilter(_wheel);
         base.OnFormClosed(e);
     }
@@ -266,11 +269,13 @@ internal sealed class PanelForm : Form
         Font oldValue = _fontValue;
         Font oldRate = _fontRate;
         Font oldLevel = _fontLevel;
+        Font oldBattery = _fontBattery;
         _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
         _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
         // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
         _fontRate = CreateMetricFont(10.5f * text);
         _fontLevel = CreateMetricFont(11f * text);
+        _fontBattery = CreateMetricFont(12f * text);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
@@ -280,6 +285,8 @@ internal sealed class PanelForm : Form
             oldRate.Dispose();
         if (oldLevel != null)
             oldLevel.Dispose();
+        if (oldBattery != null)
+            oldBattery.Dispose();
     }
 
     /// <summary>
@@ -689,7 +696,9 @@ internal sealed class PanelForm : Form
             v = 0f;
         QuickActions.DrawFillBlockVertical(g, _volTrack, v, back, UiTheme.Accent);
         int pct = _volumeKnown ? (int)Math.Round(v * 100f) : 0;
-        DrawLevelLabel(g, _volTrack, pct.ToString(), _fontLevel);
+        bool muted = !_volumeKnown || _volumeMuted;
+        DrawLevelBadge(g, _volTrack, pct.ToString(), _fontLevel, true,
+            delegate(Graphics gg, Rectangle r, Color ink) { QuickActions.GlyphSpeaker(gg, r, ink, muted); });
     }
 
     private int BrightnessStrip(Graphics g, int x, int y, int inner)
@@ -716,26 +725,62 @@ internal sealed class PanelForm : Form
                 ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
                 : Track;
             QuickActions.DrawFillBlock(g, _brightTrack, v, back, UiTheme.Accent);
-            DrawLevelLabel(g, _brightTrack, mon.Percent.ToString(), _fontLevel);
+            DrawLevelBadge(g, _brightTrack, mon.Percent.ToString(), _fontLevel, false, QuickActions.GlyphSun);
         }
         return y + blockH + gapBelow;
     }
 
-    private void DrawLevelLabel(Graphics g, Rectangle bounds, string text, Font font)
+    /// <summary>
+    /// Level digits plus identity glyph (sun / speaker), centered in the fill block.
+    /// </summary>
+    private void DrawLevelBadge(Graphics g, Rectangle bounds, string text, Font font, bool verticalStack, Action<Graphics, Rectangle, Color> glyph)
     {
-        if (font == null || string.IsNullOrEmpty(text))
+        if (font == null || string.IsNullOrEmpty(text) || glyph == null)
             return;
+        SizeF textSize = g.MeasureString(text, font);
+        int textW = (int)Math.Ceiling(textSize.Width);
+        int textH = (int)Math.Ceiling(font.GetHeight());
+        int gap = Px(4);
+        int icon;
+        int groupW;
+        int groupH;
+        if (verticalStack)
+        {
+            icon = Math.Min(Px(14), Math.Max(10, bounds.Width - Px(8)));
+            groupW = Math.Max(icon, textW);
+            groupH = icon + gap + textH;
+        }
+        else
+        {
+            icon = Math.Min(Px(14), Math.Max(10, bounds.Height - Px(8)));
+            groupW = icon + gap + textW;
+            groupH = Math.Max(icon, textH);
+        }
+        int left = bounds.X + Math.Max(0, (bounds.Width - groupW) / 2);
+        int top = bounds.Y + Math.Max(0, (bounds.Height - groupH) / 2);
+        Rectangle iconRect;
+        Rectangle textRect;
+        if (verticalStack)
+        {
+            iconRect = new Rectangle(left + (groupW - icon) / 2, top, icon, icon);
+            textRect = new Rectangle(left + (groupW - textW) / 2, top + icon + gap, textW, textH);
+        }
+        else
+        {
+            iconRect = new Rectangle(left, top + (groupH - icon) / 2, icon, icon);
+            textRect = new Rectangle(left + icon + gap, top + (groupH - textH) / 2, textW, textH);
+        }
+        glyph(g, iconRect, TextMain);
         using (StringFormat fmt = new StringFormat())
         {
             fmt.Alignment = StringAlignment.Center;
             fmt.LineAlignment = StringAlignment.Center;
             fmt.FormatFlags = StringFormatFlags.NoWrap;
-            // Soft shadow so digits stay readable over both track and accent fill.
             using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
                 g.DrawString(text, font, shadow,
-                    new Rectangle(bounds.X + 1, bounds.Y + 1, bounds.Width, bounds.Height), fmt);
+                    new Rectangle(textRect.X + 1, textRect.Y + 1, textRect.Width, textRect.Height), fmt);
             using (SolidBrush brush = new SolidBrush(TextMain))
-                g.DrawString(text, font, brush, bounds, fmt);
+                g.DrawString(text, font, brush, textRect, fmt);
         }
     }
 
@@ -825,75 +870,42 @@ internal sealed class PanelForm : Form
         int gap = Px(6);
         int right = x + inner;
         int padY = Px(4);
-        // Large hit target; glyph stays centered inside it.
-        int chevHit = Math.Min(row - Px(2), Px(36));
         int chevGlyph = Px(18);
-        _chevronHit = new Rectangle(x, y + (row - chevHit) / 2, chevHit, chevHit);
+        int chevReserve = Math.Max(Px(40), chevGlyph + Px(16)); // minimum left zone before network
+
+        // 1) Battery flush right
+        int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
+        int battLeft = _snap.BatteryKnown ? right - battW : right;
+        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
+
+        // 2) Measure network; right-align against battery
+        NetworkCluster net = MeasureNetworkCluster(g, row);
+        int wifiLeft = midRight - net.Width;
+        int minWifiLeft = x + chevReserve + gap;
+        if (wifiLeft < minWifiLeft)
+            wifiLeft = minWifiLeft;
+        int clusterTop = y + Math.Max(0, (row - net.RatesH) / 2);
+
+        // 3) Chevron hit = leftover left space (full row height) up to the network cluster
+        int chevRight = Math.Max(x + chevReserve, wifiLeft - gap);
+        _chevronHit = new Rectangle(x, y, Math.Max(chevReserve, chevRight - x), row);
         bool open = QuickPopupOpen();
         if (_chevronHot || open)
             FillRound(g, _chevronHit, Px(8), UiTheme.Hover);
         Rectangle chevGlyphRect = new Rectangle(
-            _chevronHit.X + (_chevronHit.Width - chevGlyph) / 2,
+            _chevronHit.X + Px(4),
             _chevronHit.Y + (_chevronHit.Height - chevGlyph) / 2,
             chevGlyph,
             chevGlyph);
         DrawHeaderChevron(g, chevGlyphRect, open, open || _chevronHot ? TextMain : TextMuted);
 
-        // Battery first so the network cluster can center in the mid band (chevron … battery).
-        int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
-        int battLeft = _snap.BatteryKnown ? right - battW : right;
-        int midLeft = _chevronHit.Right + Px(6);
-        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
-
-        // Rates: Unicode arrows in the same font as speeds → one baseline (no separate glyph vs text drift).
-        float down = _snap.NetKnown ? _snap.DownMBps : 0f;
-        float up = _snap.NetKnown ? _snap.UpMBps : 0f;
-        string dSpeed = down.ToString("0.00") + " MB/s";
-        string uSpeed = up.ToString("0.00") + " MB/s";
-        const string ArrowDown = "\u2193"; // ↓
-        const string ArrowUp = "\u2191";   // ↑
-        Font rateFont = _fontRate ?? _fontLabel;
-        int lineH = Math.Max(Px(12), (int)Math.Ceiling(rateFont.GetHeight()));
-        int rowGap = Math.Max(1, Px(2));
-        SizeF arrowDownSize;
-        SizeF arrowUpSize;
-        SizeF dSize;
-        SizeF uSize;
-        using (StringFormat measure = new StringFormat(StringFormat.GenericTypographic))
-        {
-            measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
-            arrowDownSize = g.MeasureString(ArrowDown, rateFont, int.MaxValue, measure);
-            arrowUpSize = g.MeasureString(ArrowUp, rateFont, int.MaxValue, measure);
-            dSize = g.MeasureString(dSpeed, rateFont, int.MaxValue, measure);
-            uSize = g.MeasureString(uSpeed, rateFont, int.MaxValue, measure);
-        }
-        int arrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
-        int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
-        int rateColW = arrowColW + textW;
-        int ratesH = lineH * 2 + rowGap;
-        int maxSide = row - Px(2);
-        if (ratesH > maxSide)
-        {
-            lineH = Math.Max(Px(10), (maxSide - rowGap) / 2);
-            ratesH = lineH * 2 + rowGap;
-        }
-        // Square Wi-Fi == meters stack height; shared top/bottom.
-        int wifi = ratesH;
-        int clusterGap = Px(6);
-        int netW = wifi + clusterGap + rateColW;
-        int midW = Math.Max(0, midRight - midLeft);
-        // Mid band, slightly left of center: Wi-Fi on the left of the pair, meters on the right.
-        int wifiLeft = midLeft + Math.Max(0, (midW - netW) * 2 / 5);
-        int clusterTop = y + Math.Max(0, (row - ratesH) / 2);
-        _wifiHit = new Rectangle(wifiLeft - Px(2), y, netW + Px(4), row);
+        // 4) Network cluster
+        _wifiHit = new Rectangle(wifiLeft - Px(2), y, net.Width + Px(4), row);
         if (_wifiHot)
             FillRound(g, _wifiHit, Px(8), UiTheme.Hover);
-        DrawWifi(g, new Rectangle(wifiLeft, clusterTop, wifi, wifi),
-            _snap.WifiUp || _snap.NetKnown, true);
-        int ratesX = wifiLeft + wifi + clusterGap;
-        DrawNetworkRateRow(g, ratesX, clusterTop, lineH, arrowColW, ArrowDown, dSpeed, rateFont, UiTheme.Down);
-        DrawNetworkRateRow(g, ratesX, clusterTop + lineH + rowGap, lineH, arrowColW, ArrowUp, uSpeed, rateFont, UiTheme.Up);
+        DrawNetworkCluster(g, wifiLeft, clusterTop, net);
 
+        // 5) Battery
         if (_snap.BatteryKnown)
         {
             int divX = Math.Max(_wifiHit.Right + gap, battLeft - Px(4));
@@ -904,6 +916,71 @@ internal sealed class PanelForm : Form
                 FillRound(g, _batteryHit, Px(8), UiTheme.Hover);
             DrawHeaderBatteryLeft(g, battLeft, y, row, right);
         }
+    }
+
+    private struct NetworkCluster
+    {
+        public int Width;
+        public int Wifi;
+        public int RatesH;
+        public int LineH;
+        public int RowGap;
+        public int ClusterGap;
+        public int ArrowColW;
+        public string DownSpeed;
+        public string UpSpeed;
+        public Font RateFont;
+    }
+
+    private NetworkCluster MeasureNetworkCluster(Graphics g, int row)
+    {
+        NetworkCluster net = new NetworkCluster();
+        float down = _snap.NetKnown ? _snap.DownMBps : 0f;
+        float up = _snap.NetKnown ? _snap.UpMBps : 0f;
+        net.DownSpeed = down.ToString("0.00") + " MB/s";
+        net.UpSpeed = up.ToString("0.00") + " MB/s";
+        const string ArrowDown = "\u2193";
+        const string ArrowUp = "\u2191";
+        net.RateFont = _fontRate ?? _fontLabel;
+        net.LineH = Math.Max(Px(12), (int)Math.Ceiling(net.RateFont.GetHeight()));
+        net.RowGap = Math.Max(1, Px(2));
+        SizeF arrowDownSize;
+        SizeF arrowUpSize;
+        SizeF dSize;
+        SizeF uSize;
+        using (StringFormat measure = new StringFormat(StringFormat.GenericTypographic))
+        {
+            measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+            arrowDownSize = g.MeasureString(ArrowDown, net.RateFont, int.MaxValue, measure);
+            arrowUpSize = g.MeasureString(ArrowUp, net.RateFont, int.MaxValue, measure);
+            dSize = g.MeasureString(net.DownSpeed, net.RateFont, int.MaxValue, measure);
+            uSize = g.MeasureString(net.UpSpeed, net.RateFont, int.MaxValue, measure);
+        }
+        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
+        int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
+        int rateColW = net.ArrowColW + textW;
+        net.RatesH = net.LineH * 2 + net.RowGap;
+        int maxSide = row - Px(2);
+        if (net.RatesH > maxSide)
+        {
+            net.LineH = Math.Max(Px(10), (maxSide - net.RowGap) / 2);
+            net.RatesH = net.LineH * 2 + net.RowGap;
+        }
+        net.Wifi = net.RatesH;
+        net.ClusterGap = Px(6);
+        net.Width = net.Wifi + net.ClusterGap + rateColW;
+        return net;
+    }
+
+    private void DrawNetworkCluster(Graphics g, int wifiLeft, int clusterTop, NetworkCluster net)
+    {
+        const string ArrowDown = "\u2193";
+        const string ArrowUp = "\u2191";
+        DrawWifi(g, new Rectangle(wifiLeft, clusterTop, net.Wifi, net.Wifi),
+            _snap.WifiUp || _snap.NetKnown, true);
+        int ratesX = wifiLeft + net.Wifi + net.ClusterGap;
+        DrawNetworkRateRow(g, ratesX, clusterTop, net.LineH, net.ArrowColW, ArrowDown, net.DownSpeed, net.RateFont, UiTheme.Down);
+        DrawNetworkRateRow(g, ratesX, clusterTop + net.LineH + net.RowGap, net.LineH, net.ArrowColW, ArrowUp, net.UpSpeed, net.RateFont, UiTheme.Up);
     }
 
     private static void DrawHeaderChevron(Graphics g, Rectangle r, bool pointRight, Color ink)
@@ -932,7 +1009,8 @@ internal sealed class PanelForm : Form
     private int EstimateBatteryWidth(Graphics g)
     {
         string percent = _snap.BatteryPercent + "%";
-        SizeF size = g.MeasureString(percent, _fontValue);
+        Font battFont = _fontBattery ?? _fontValue;
+        SizeF size = g.MeasureString(percent, battFont);
         int icons = 0;
         if ((_snap.AcKnown && _snap.PluggedIn) || (_snap.AcKnown && !_snap.PluggedIn))
             icons++;
@@ -947,6 +1025,7 @@ internal sealed class PanelForm : Form
     private void DrawHeaderBatteryLeft(Graphics g, int x, int y, int row, int rightLimit)
     {
         string percent = _snap.BatteryPercent + "%";
+        Font battFont = _fontBattery ?? _fontValue;
         bool plug = _snap.AcKnown && _snap.PluggedIn;
         bool cell = _snap.AcKnown && !_snap.PluggedIn;
         bool bolt = _snap.Charging;
@@ -969,7 +1048,7 @@ internal sealed class PanelForm : Form
             DrawBolt(g, new Rectangle(cursor, gy, s, s), TextMuted);
             cursor += s + gap;
         }
-        SizeF size = g.MeasureString(percent, _fontValue);
+        SizeF size = g.MeasureString(percent, battFont);
         int valueW = (int)Math.Ceiling(size.Width) + Px(2);
         if (cursor + valueW > rightLimit)
             valueW = Math.Max(Px(28), rightLimit - cursor);
@@ -980,7 +1059,7 @@ internal sealed class PanelForm : Form
             fmt.LineAlignment = StringAlignment.Center;
             fmt.FormatFlags = StringFormatFlags.NoWrap;
             fmt.Trimming = StringTrimming.None;
-            g.DrawString(percent, _fontValue, brush, new Rectangle(cursor, y, valueW, row), fmt);
+            g.DrawString(percent, battFont, brush, new Rectangle(cursor, y, valueW, row), fmt);
         }
     }
 
