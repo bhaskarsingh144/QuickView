@@ -40,15 +40,15 @@ Live CPU, memory, GPU, and disk metrics at a glance — with brightness and volu
 
 ### Status header / chrome
 
-- Compact **network** block: Wi-Fi/Ethernet icon + download / upload rates (no SSID)
-- Compact **battery** percent with charging indicator
+- Wide **drawer** hit zone (control fills the hover rect → Quick settings); **network** (larger Wi-Fi + rates) sits next to **battery**
+- Compact **battery** percent (semibold metric face) with charging indicator
 - Click network → Windows network settings · Click battery → power options
-- **Brightness** HyperOS-style fill block under the header — drag or scroll ±1%; panel soft-dims while scrolling so you can judge the screen
-- **Volume** vertical HyperOS-style fill on the right of the header/brightness column — drag or scroll ±1% (no dim)
+- **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling
+- **Volume** vertical fill with speaker icon + level — drag or scroll ±1% (no dim)
 
 ### Quick settings drawer
 
-Open from the left-edge chevron (hover or click):
+Open from the left-edge drawer control (hover or click):
 
 | Section | What you get |
 | --- | --- |
@@ -113,7 +113,7 @@ Runs unit tests (TextScale, SliderWheel, OpacityFade, DisplayScale). Manual matr
 
 **Metric chips** — click CPU, Memory, GPU, or Disk for a detailed view; click again to return to the resting page.
 
-**Quick settings** — chevron on the left edge of the panel (◀ / ▶). Esc or leave the drawer to close.
+**Quick settings** — drawer control on the left edge of the panel (tile grid; hover opens instantly with a short fade-in). Esc or leave the drawer to close (brief leave grace).
 
 ---
 

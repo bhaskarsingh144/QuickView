@@ -19,11 +19,17 @@ internal sealed class QuickSettingsPopup : Form
     private readonly Font _fontValue;
     private readonly Font _fontTitle;
     private readonly System.Windows.Forms.Timer _poll;
+    private readonly System.Windows.Forms.Timer _fade;
     private float _dpi;
     private float _fit;
     private float _textFit;
     private QuickHit _hover = QuickHit.None;
     private DateTime _lastPoll = DateTime.MinValue;
+    private double _fadeFrom = OpacityFade.Normal;
+    private double _fadeTo = OpacityFade.Normal;
+    private DateTime _fadeStartedUtc = DateTime.MinValue;
+    private int _fadeDurationMs;
+    private bool _fadeRunning;
 
     public QuickSettingsPopup(AudioControl audio, float dpi, float fit, float textFit)
     {
@@ -49,6 +55,9 @@ internal sealed class QuickSettingsPopup : Form
         _poll = new System.Windows.Forms.Timer();
         _poll.Interval = 120;
         _poll.Tick += PollTick;
+        _fade = new System.Windows.Forms.Timer();
+        _fade.Interval = 16;
+        _fade.Tick += FadeTick;
         KeyPreview = true;
         ApplyLayoutSize();
     }
@@ -79,14 +88,18 @@ internal sealed class QuickSettingsPopup : Form
     {
         _audio.Refresh();
         RefreshState(true);
-        Opacity = OpacityFade.Normal;
         ApplyLayoutSize();
         PlaceBesidePanel(panelScreen);
         if (!Visible)
         {
+            // Instant show + short ease-in — open dwell lives on the panel hover, not here.
+            Opacity = OpacityFade.DrawerShowFrom;
             Show();
             _poll.Start();
+            StartShowFade();
         }
+        else if (!_fadeRunning)
+            Opacity = OpacityFade.Normal;
         RaiseAbove();
         Invalidate();
     }
@@ -129,15 +142,51 @@ internal sealed class QuickSettingsPopup : Form
     public void HidePopup()
     {
         _poll.Stop();
+        StopShowFade();
         Opacity = OpacityFade.Normal;
         _quick.Armed = QuickArm.None;
         if (Visible)
             Hide();
     }
 
+    private void StartShowFade()
+    {
+        _fadeFrom = Opacity;
+        _fadeTo = OpacityFade.Normal;
+        _fadeDurationMs = OpacityFade.DrawerShowMs;
+        _fadeStartedUtc = DateTime.UtcNow;
+        _fadeRunning = true;
+        if (!_fade.Enabled)
+            _fade.Start();
+    }
+
+    private void StopShowFade()
+    {
+        _fade.Stop();
+        _fadeRunning = false;
+    }
+
+    private void FadeTick(object sender, EventArgs e)
+    {
+        if (!_fadeRunning)
+        {
+            _fade.Stop();
+            return;
+        }
+        int elapsed = (int)(DateTime.UtcNow - _fadeStartedUtc).TotalMilliseconds;
+        Opacity = OpacityFade.OpacityAt(_fadeFrom, _fadeTo, elapsed, _fadeDurationMs);
+        if (OpacityFade.FadeComplete(elapsed, _fadeDurationMs))
+        {
+            Opacity = _fadeTo;
+            StopShowFade();
+        }
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _poll.Stop();
+        StopShowFade();
+        _fade.Dispose();
         _fontLabel.Dispose();
         _fontValue.Dispose();
         _fontTitle.Dispose();

@@ -51,13 +51,28 @@ internal static class OpacityFadeTests
         if (OpacityFade.IdleElapsed(deadline, deadline)) { Pass("idle at deadline"); } else { Fail("idle at deadline"); }
         if (OpacityFade.IdleElapsed(deadline.AddMilliseconds(1), deadline)) { Pass("idle after deadline"); } else { Fail("idle after deadline"); }
 
-        if (OpacityFade.Preview > 0.25 && OpacityFade.Preview < 0.5) { Pass("preview moderately transparent"); } else { Fail("preview moderately transparent"); }
+        // Floor is 0.35 × 1.35 × 1.35 — soft peek; panel stays clearly readable.
+        ExpectDouble(0.637875, OpacityFade.Preview, 0.0001, "preview opacity floor");
+        if (OpacityFade.Preview > 0.55 && OpacityFade.Preview < OpacityFade.PanelNormal)
+            Pass("preview between readable and panel normal");
+        else
+            Fail("preview between readable and panel normal");
         if (OpacityFade.Normal > 0.9) { Pass("normal near opaque"); } else { Fail("normal near opaque"); }
         if (OpacityFade.PanelNormal > 0.9 && OpacityFade.PanelNormal < OpacityFade.Normal)
             Pass("panel normal slightly below drawer normal");
         else
             Fail("panel normal slightly below drawer normal");
         ExpectDouble(OpacityFade.PanelNormal, OpacityFade.OpacityAt(OpacityFade.Preview, OpacityFade.PanelNormal, OpacityFade.FadeInMs, OpacityFade.FadeInMs), 0.0001, "fade in ends at PanelNormal");
+
+        if (OpacityFade.DrawerShowMs > 0 && OpacityFade.DrawerShowMs <= 150)
+            Pass("drawer show fade is snappy");
+        else
+            Fail("drawer show fade is snappy");
+        if (OpacityFade.DrawerShowFrom > 0.1 && OpacityFade.DrawerShowFrom < OpacityFade.Normal)
+            Pass("drawer show starts below normal");
+        else
+            Fail("drawer show starts below normal");
+        ExpectDouble(OpacityFade.Normal, OpacityFade.OpacityAt(OpacityFade.DrawerShowFrom, OpacityFade.Normal, OpacityFade.DrawerShowMs, OpacityFade.DrawerShowMs), 0.0001, "drawer show ends at Normal");
 
         Console.WriteLine();
         Console.WriteLine("OpacityFade tests: {0} passed, {1} failed", _passed, _failed);
