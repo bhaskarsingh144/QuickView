@@ -861,23 +861,28 @@ internal sealed class PanelForm : Form
         int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
         int rateColW = arrowColW + textW;
         int ratesH = lineH * 2 + rowGap;
-        int wifi = Math.Min(ratesH, row - Px(4));
-        if (wifi < Px(18))
-            wifi = Math.Min(Px(18), row - Px(4));
+        int maxSide = row - Px(2);
+        if (ratesH > maxSide)
+        {
+            lineH = Math.Max(Px(10), (maxSide - rowGap) / 2);
+            ratesH = lineH * 2 + rowGap;
+        }
+        // Square Wi-Fi == meters stack height; shared top/bottom.
+        int wifi = ratesH;
         int clusterGap = Px(6);
         int netW = wifi + clusterGap + rateColW;
         int midW = Math.Max(0, midRight - midLeft);
-        int wifiLeft = midLeft + Math.Max(0, (midW - netW) / 2);
-        int clusterTop = y + Math.Max(0, (row - Math.Max(wifi, ratesH)) / 2);
+        // Mid band, slightly left of center: Wi-Fi on the left of the pair, meters on the right.
+        int wifiLeft = midLeft + Math.Max(0, (midW - netW) * 2 / 5);
+        int clusterTop = y + Math.Max(0, (row - ratesH) / 2);
         _wifiHit = new Rectangle(wifiLeft - Px(2), y, netW + Px(4), row);
         if (_wifiHot)
             FillRound(g, _wifiHit, Px(8), UiTheme.Hover);
-        DrawWifi(g, new Rectangle(wifiLeft, clusterTop + (Math.Max(wifi, ratesH) - wifi) / 2, wifi, wifi),
+        DrawWifi(g, new Rectangle(wifiLeft, clusterTop, wifi, wifi),
             _snap.WifiUp || _snap.NetKnown, true);
         int ratesX = wifiLeft + wifi + clusterGap;
-        int ratesY = clusterTop + (Math.Max(wifi, ratesH) - ratesH) / 2;
-        DrawNetworkRateRow(g, ratesX, ratesY, lineH, arrowColW, ArrowDown, dSpeed, rateFont, UiTheme.Down);
-        DrawNetworkRateRow(g, ratesX, ratesY + lineH + rowGap, lineH, arrowColW, ArrowUp, uSpeed, rateFont, UiTheme.Up);
+        DrawNetworkRateRow(g, ratesX, clusterTop, lineH, arrowColW, ArrowDown, dSpeed, rateFont, UiTheme.Down);
+        DrawNetworkRateRow(g, ratesX, clusterTop + lineH + rowGap, lineH, arrowColW, ArrowUp, uSpeed, rateFont, UiTheme.Up);
 
         if (_snap.BatteryKnown)
         {
@@ -977,9 +982,9 @@ internal sealed class PanelForm : Form
         float left = r.Left + (r.Width - size) / 2f;
         float top = r.Top + (r.Height - size) / 2f;
         float cx = left + size / 2f;
-        // Anchor near the bottom so the three arcs fill the square (Fluent-style fan).
-        float cy = top + size * 0.86f;
-        float stroke = Math.Max(2.4f, size * 0.13f);
+        // Fan centered in the square (not sunk to the bottom — that looked lower than the meters).
+        float cy = top + size * 0.78f;
+        float stroke = Math.Max(2.2f, size * 0.12f);
         SmoothingMode prev = g.SmoothingMode;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using (Pen pen = new Pen(ink, stroke))
@@ -987,8 +992,7 @@ internal sealed class PanelForm : Form
             pen.StartCap = LineCap.Round;
             pen.EndCap = LineCap.Round;
             pen.LineJoin = LineJoin.Round;
-            // Outer → mid → inner; diameters sized so the fan uses almost the full box.
-            float[] diams = new float[] { size * 0.96f, size * 0.62f, size * 0.30f };
+            float[] diams = new float[] { size * 0.90f, size * 0.58f, size * 0.28f };
             const float start = 215f;
             const float sweep = 110f;
             for (int i = 0; i < diams.Length; i++)
