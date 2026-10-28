@@ -854,13 +854,9 @@ internal sealed class PanelForm : Form
         DrawWifi(g, new Rectangle(wifiLeft, y + (row - wifi) / 2, wifi, wifi), _snap.WifiUp || _snap.NetKnown, true);
         int ratesX = wifiLeft + wifi + Px(8);
         int ratesY = y + Math.Max(0, (row - ratesH) / 2);
-        DrawDown(g, new Rectangle(ratesX, ratesY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Down);
-        using (SolidBrush brush = new SolidBrush(UiTheme.Down))
-            g.DrawString(dText, rateFont, brush, ratesX + rateIcon + Px(3), ratesY + Math.Max(0, (lineH - rateTextH) / 2));
-        int upY = ratesY + lineH + Px(2);
-        DrawUp(g, new Rectangle(ratesX, upY + Math.Max(0, (lineH - rateIcon) / 2), rateIcon, rateIcon), UiTheme.Up);
-        using (SolidBrush brush = new SolidBrush(UiTheme.Up))
-            g.DrawString(uText, rateFont, brush, ratesX + rateIcon + Px(3), upY + Math.Max(0, (lineH - rateTextH) / 2));
+        int textGap = Px(3);
+        DrawNetworkRateRow(g, ratesX, ratesY, lineH, rateIcon, textGap, dText, rateFont, UiTheme.Down, true);
+        DrawNetworkRateRow(g, ratesX, ratesY + lineH + Px(2), lineH, rateIcon, textGap, uText, rateFont, UiTheme.Up, false);
 
         // Compact battery: icons + percent, reserved from the right.
         if (_snap.BatteryKnown)
@@ -999,29 +995,61 @@ internal sealed class PanelForm : Form
         g.SmoothingMode = prev;
     }
 
+    /// <summary>
+    /// One network rate line: arrow and speed share the same row band so they center together.
+    /// </summary>
+    private void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int icon, int textGap, string text, Font font, Color color, bool down)
+    {
+        int iconY = y + Math.Max(0, (lineH - icon) / 2);
+        Rectangle iconRect = new Rectangle(x, iconY, icon, icon);
+        if (down)
+            DrawDown(g, iconRect, color);
+        else
+            DrawUp(g, iconRect, color);
+        // Layout rectangle + LineAlignment.Center — plain DrawString(Y) sits on the glyph top and looks high vs the arrow.
+        Rectangle textRect = new Rectangle(x + icon + textGap, y, Px(160), lineH);
+        using (SolidBrush brush = new SolidBrush(color))
+        using (StringFormat fmt = new StringFormat())
+        {
+            fmt.Alignment = StringAlignment.Near;
+            fmt.LineAlignment = StringAlignment.Center;
+            fmt.FormatFlags = StringFormatFlags.NoWrap;
+            fmt.Trimming = StringTrimming.None;
+            g.DrawString(text, font, brush, textRect, fmt);
+        }
+    }
+
     private static void DrawDown(Graphics g, Rectangle r, Color color)
     {
-        using (Pen pen = new Pen(color, 1.6f))
+        using (Pen pen = new Pen(color, Math.Max(1.4f, r.Width / 7f)))
         {
             pen.StartCap = LineCap.Round;
             pen.EndCap = LineCap.Round;
+            pen.LineJoin = LineJoin.Round;
             int mid = r.Left + r.Width / 2;
-            g.DrawLine(pen, mid, r.Top + 1, mid, r.Bottom - 3);
-            g.DrawLine(pen, mid - 3, r.Bottom - 6, mid, r.Bottom - 2);
-            g.DrawLine(pen, mid + 3, r.Bottom - 6, mid, r.Bottom - 2);
+            int top = r.Top + Math.Max(1, r.Height / 8);
+            int bot = r.Bottom - Math.Max(1, r.Height / 8);
+            int head = Math.Max(2, r.Width / 3);
+            g.DrawLine(pen, mid, top, mid, bot);
+            g.DrawLine(pen, mid - head, bot - head, mid, bot);
+            g.DrawLine(pen, mid + head, bot - head, mid, bot);
         }
     }
 
     private static void DrawUp(Graphics g, Rectangle r, Color color)
     {
-        using (Pen pen = new Pen(color, 1.6f))
+        using (Pen pen = new Pen(color, Math.Max(1.4f, r.Width / 7f)))
         {
             pen.StartCap = LineCap.Round;
             pen.EndCap = LineCap.Round;
+            pen.LineJoin = LineJoin.Round;
             int mid = r.Left + r.Width / 2;
-            g.DrawLine(pen, mid, r.Top + 3, mid, r.Bottom - 1);
-            g.DrawLine(pen, mid - 3, r.Top + 6, mid, r.Top + 2);
-            g.DrawLine(pen, mid + 3, r.Top + 6, mid, r.Top + 2);
+            int top = r.Top + Math.Max(1, r.Height / 8);
+            int bot = r.Bottom - Math.Max(1, r.Height / 8);
+            int head = Math.Max(2, r.Width / 3);
+            g.DrawLine(pen, mid, bot, mid, top);
+            g.DrawLine(pen, mid - head, top + head, mid, top);
+            g.DrawLine(pen, mid + head, top + head, mid, top);
         }
     }
 
