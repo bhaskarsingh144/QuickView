@@ -28,7 +28,7 @@ Automated: `.\scripts\test.ps1` (SliderWheel, OpacityFade).
 |----|--------|-------|
 | B1 Drag track | | Brightness follows |
 | B2 Hover + scroll | | ±1% per notch |
-| B3 While scrolling | | Panel fades nearly clear |
+| B3 While scrolling | | Panel soft-dims to Preview floor (~0.64); chrome stays readable |
 | B4 After ~650ms idle | | Panel eases back to normal opacity |
 
 ## C. Volume drag / wheel
