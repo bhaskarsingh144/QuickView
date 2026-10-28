@@ -39,6 +39,7 @@ internal sealed class PanelForm : Form
     private Font _fontValue;
     private Font _fontRate;
     private Font _fontLevel;
+    private Font _fontVolLevel;
     private Font _fontBattery;
     private Snapshot _snap = Snapshot.Empty();
     private DetailMode _detail = DetailMode.None;
@@ -94,6 +95,8 @@ internal sealed class PanelForm : Form
     private bool _brightDragging;
     private bool _brightHover;
     private Rectangle _volTrack;
+    /// <summary>Fill segment of the volume column (badge sits above this).</summary>
+    private Rectangle _volFill;
     private bool _volDragging;
     private bool _volHover;
     private float _volume01;
@@ -204,6 +207,8 @@ internal sealed class PanelForm : Form
             _fontRate.Dispose();
         if (_fontLevel != null)
             _fontLevel.Dispose();
+        if (_fontVolLevel != null)
+            _fontVolLevel.Dispose();
         if (_fontBattery != null)
             _fontBattery.Dispose();
         Application.RemoveMessageFilter(_wheel);
@@ -272,6 +277,7 @@ internal sealed class PanelForm : Form
         Font oldValue = _fontValue;
         Font oldRate = _fontRate;
         Font oldLevel = _fontLevel;
+        Font oldVolLevel = _fontVolLevel;
         Font oldBattery = _fontBattery;
         _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
         _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
@@ -279,6 +285,8 @@ internal sealed class PanelForm : Form
         // Modest metric face — large enough to read, small enough that the cluster stays stable.
         _fontRate = CreateMetricFont(11.5f * text);
         _fontLevel = CreateMetricFont(11f * text);
+        // Narrow volume column — smaller digits than the brightness strip.
+        _fontVolLevel = CreateMetricFont(8.5f * text);
         _fontBattery = CreateMetricFont(11f * text);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
@@ -289,6 +297,8 @@ internal sealed class PanelForm : Form
             oldRate.Dispose();
         if (oldLevel != null)
             oldLevel.Dispose();
+        if (oldVolLevel != null)
+            oldVolLevel.Dispose();
         if (oldBattery != null)
             oldBattery.Dispose();
     }
@@ -689,7 +699,12 @@ internal sealed class PanelForm : Form
             : afterHeader - Px(14);
         if (volBottom < y0 + Px(40))
             volBottom = y0 + Px(40);
+        // Full column hit; fill is shortened from the top so icon+level sit outside the slider.
         _volTrack = new Rectangle(x + mainW + gap, y0, volW, Math.Max(Px(40), volBottom - y0));
+        int badgeH = Math.Min(Px(30), Math.Max(Px(24), _volTrack.Height / 5));
+        if (badgeH > _volTrack.Height - Px(28))
+            badgeH = Math.Max(Px(20), _volTrack.Height - Px(28));
+        _volFill = new Rectangle(_volTrack.X, _volTrack.Y + badgeH, _volTrack.Width, _volTrack.Height - badgeH);
         if (g != null)
             DrawVolumeColumn(g);
         return Chips(g, x, y, inner);
@@ -705,10 +720,14 @@ internal sealed class PanelForm : Form
         float v = _volumeKnown ? _volume01 : 0f;
         if (_volumeMuted)
             v = 0f;
-        QuickActions.DrawFillBlockVertical(g, _volTrack, v, back, UiTheme.Accent);
-        int pct = _volumeKnown ? (int)Math.Round(v * 100f) : 0;
+        Rectangle badge = new Rectangle(_volTrack.X, _volTrack.Y, _volTrack.Width,
+            Math.Max(1, _volFill.Y - _volTrack.Y));
+        if (_volFill.Height > 0)
+            QuickActions.DrawFillBlockVertical(g, _volFill, v, back, UiTheme.Accent);
+        int pct = _volumeKnown ? (int)Math.Round((_volumeMuted ? 0f : _volume01) * 100f) : 0;
         bool muted = !_volumeKnown || _volumeMuted;
-        DrawLevelBadge(g, _volTrack, pct.ToString(), _fontLevel, true,
+        Font volFont = _fontVolLevel ?? _fontLevel;
+        DrawLevelBadge(g, badge, pct.ToString(), volFont, true,
             delegate(Graphics gg, Rectangle r, Color ink) { QuickActions.GlyphSpeaker(gg, r, ink, muted); });
     }
 
@@ -2102,9 +2121,11 @@ internal sealed class PanelForm : Form
 
     private void ApplyPanelVolumeAt(int y)
     {
-        if (_volTrack.Height < 1 || !_volumeKnown)
+        // Map against the fill segment only — badge above is display, not the drag range.
+        Rectangle fill = _volFill.Height > 0 ? _volFill : _volTrack;
+        if (fill.Height < 1 || !_volumeKnown)
             return;
-        float v = SliderWheel.VolumeFromVerticalY(y, _volTrack.Y, _volTrack.Height);
+        float v = SliderWheel.VolumeFromVerticalY(y, fill.Y, fill.Height);
         if (_audio.TrySetVolume(v))
         {
             _volume01 = v;
