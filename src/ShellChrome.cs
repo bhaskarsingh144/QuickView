@@ -178,11 +178,30 @@ internal static class ShellChrome
     {
         Point pt = Control.MousePosition;
         Rectangle screen = Screen.PrimaryScreen.Bounds;
+        bool inStrip;
         if (edge == ShellEdge.Top)
-            return pt.Y >= screen.Top - PastEdgePx && pt.Y <= screen.Top + HoverStripPx && pt.X >= screen.Left - PastEdgePx && pt.X <= screen.Right + PastEdgePx;
-        if (edge == ShellEdge.Bottom)
-            return pt.Y <= screen.Bottom + PastEdgePx && pt.Y >= screen.Bottom - HoverStripPx && pt.X >= screen.Left - PastEdgePx && pt.X <= screen.Right + PastEdgePx;
-        return pt.X >= screen.Right - HoverStripPx && pt.X <= screen.Right + PastEdgePx && pt.Y >= screen.Top - PastEdgePx && pt.Y <= screen.Bottom + PastEdgePx;
+            inStrip = pt.Y >= screen.Top - PastEdgePx && pt.Y <= screen.Top + HoverStripPx && pt.X >= screen.Left - PastEdgePx && pt.X <= screen.Right + PastEdgePx;
+        else if (edge == ShellEdge.Bottom)
+            inStrip = pt.Y <= screen.Bottom + PastEdgePx && pt.Y >= screen.Bottom - HoverStripPx && pt.X >= screen.Left - PastEdgePx && pt.X <= screen.Right + PastEdgePx;
+        else
+            inStrip = pt.X >= screen.Right - HoverStripPx && pt.X <= screen.Right + PastEdgePx && pt.Y >= screen.Top - PastEdgePx && pt.Y <= screen.Bottom + PastEdgePx;
+        if (!inStrip)
+            return false;
+        // JumpDock More tile / popups often sit in the right strip — do not steal that hover.
+        if (PointerOverCompanion())
+            return false;
+        return true;
+    }
+
+    private static bool PointerOverCompanion()
+    {
+        POINT p;
+        p.X = Control.MousePosition.X;
+        p.Y = Control.MousePosition.Y;
+        IntPtr hwnd = WindowFromPoint(p);
+        if (hwnd == IntPtr.Zero)
+            return false;
+        return IsCompanion(Root(hwnd));
     }
 
     private static bool RealAppFillsPrimary()
@@ -253,7 +272,7 @@ internal static class ShellChrome
         try
         {
             string name = Process.GetProcessById((int)pid).ProcessName;
-            if (name == "WorkAppsDock" || name == "QuickView")
+            if (name == "JumpDock" || name == "WorkAppsDock" || name == "SidePanel" || name == "QuickView")
                 _pidKind = 1;
         }
         catch
@@ -302,6 +321,9 @@ internal static class ShellChrome
             return hwnd;
         return root;
     }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT point);
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
