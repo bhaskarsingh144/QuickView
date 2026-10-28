@@ -30,7 +30,7 @@ Live CPU and memory at a glance on the resting panel — GPU and disk behind met
 
 ### Real-time monitoring
 
-- **Resting overview** — compact CPU + Memory graphs (title, current %, optional temp in the graph chrome); no scrollbar. Live clock on CPU; in-use / committed / cached + modules on Memory
+- **Resting overview** — CPU + Memory only (no Disk/GPU blocks); graphs with title + current % (+ temp). CPU keeps name, cores/threads, rated/live clock, per-core grid; Memory keeps in-use / committed / cached + modules (pools on Memory chip)
 - **CPU chip** — usage %, processor name, cores/threads, rated and live clock, per-core clocks, optional temperature, top processes
 - **Memory chip** — in-use (Task Manager–aligned), committed, cached, paged/non-paged pools, module info, optional temperature, Trim, top processes
 - **GPU chip** — 3D engine usage (capped at 100%), dedicated and shared adapter memory, optional temperature
@@ -41,8 +41,8 @@ Live CPU and memory at a glance on the resting panel — GPU and disk behind met
 
 ### Status header / chrome
 
-- Wide **drawer** hit zone (control fills the hover rect → Quick settings); **network** (larger Wi-Fi + rates) sits next to **battery**
-- Compact **battery** percent (semibold metric face) with charging indicator
+- Wide **drawer** hit zone (control fills the hover rect → Quick settings); **network** (stable-width Wi-Fi + rates) sits next to **battery**
+- Compact **battery** percent in a fixed slot (semibold metric face) with charging indicator
 - Click network → Windows network settings · Click battery → power options
 - **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling
 - **Volume** vertical fill with speaker icon + level — drag or scroll ±1% (no dim)

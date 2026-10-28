@@ -276,10 +276,10 @@ internal sealed class PanelForm : Form
         _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
         _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
         // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
-        // ~35% larger than the original 10.5pt so Wi-Fi + rates read clearly in the header.
-        _fontRate = CreateMetricFont(14.2f * text);
+        // Modest metric face — large enough to read, small enough that the cluster stays stable.
+        _fontRate = CreateMetricFont(11.5f * text);
         _fontLevel = CreateMetricFont(11f * text);
-        _fontBattery = CreateMetricFont(12f * text);
+        _fontBattery = CreateMetricFont(11f * text);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
@@ -858,8 +858,8 @@ internal sealed class PanelForm : Form
 
     private int Header(Graphics g, int x, int y, int inner)
     {
-        // Room for ~35% larger network cluster (Wi-Fi square tracks rate stack height).
-        int row = Px(56);
+        // Compact header row — network rates + Wi-Fi fit without dominating the drawer hit.
+        int row = Px(48);
         if (g != null)
         {
             DrawStatus(g, x, y, inner, row);
@@ -937,6 +937,7 @@ internal sealed class PanelForm : Form
         public int RowGap;
         public int ClusterGap;
         public int ArrowColW;
+        public int RateTextW;
         public string DownSpeed;
         public string UpSpeed;
         public Font RateFont;
@@ -951,33 +952,33 @@ internal sealed class PanelForm : Form
         net.UpSpeed = up.ToString("0.00") + " MB/s";
         const string ArrowDown = "\u2193";
         const string ArrowUp = "\u2191";
+        // Fixed sample so digit changes (0.09 → 12.34) do not resize the cluster / drawer hit.
+        const string RateSample = "99.99 MB/s";
         net.RateFont = _fontRate ?? _fontLabel;
-        net.LineH = Math.Max(Px(14), (int)Math.Ceiling(net.RateFont.GetHeight()));
-        net.RowGap = Math.Max(2, Px(3));
+        net.LineH = Math.Max(Px(12), (int)Math.Ceiling(net.RateFont.GetHeight()));
+        net.RowGap = Math.Max(1, Px(2));
         SizeF arrowDownSize;
         SizeF arrowUpSize;
-        SizeF dSize;
-        SizeF uSize;
+        SizeF sampleSize;
         using (StringFormat measure = new StringFormat(StringFormat.GenericTypographic))
         {
             measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
             arrowDownSize = g.MeasureString(ArrowDown, net.RateFont, int.MaxValue, measure);
             arrowUpSize = g.MeasureString(ArrowUp, net.RateFont, int.MaxValue, measure);
-            dSize = g.MeasureString(net.DownSpeed, net.RateFont, int.MaxValue, measure);
-            uSize = g.MeasureString(net.UpSpeed, net.RateFont, int.MaxValue, measure);
+            sampleSize = g.MeasureString(RateSample, net.RateFont, int.MaxValue, measure);
         }
-        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(5);
-        int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
-        int rateColW = net.ArrowColW + textW;
+        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
+        net.RateTextW = (int)Math.Ceiling(sampleSize.Width) + Px(2);
+        int rateColW = net.ArrowColW + net.RateTextW;
         net.RatesH = net.LineH * 2 + net.RowGap;
-        int maxSide = row - Px(4);
+        int maxSide = row - Px(6);
         if (net.RatesH > maxSide)
         {
-            net.LineH = Math.Max(Px(12), (maxSide - net.RowGap) / 2);
+            net.LineH = Math.Max(Px(10), (maxSide - net.RowGap) / 2);
             net.RatesH = net.LineH * 2 + net.RowGap;
         }
         net.Wifi = net.RatesH;
-        net.ClusterGap = Px(8);
+        net.ClusterGap = Px(6);
         net.Width = net.Wifi + net.ClusterGap + rateColW;
         return net;
     }
@@ -989,8 +990,10 @@ internal sealed class PanelForm : Form
         DrawWifi(g, new Rectangle(wifiLeft, clusterTop, net.Wifi, net.Wifi),
             _snap.WifiUp || _snap.NetKnown, true);
         int ratesX = wifiLeft + net.Wifi + net.ClusterGap;
-        DrawNetworkRateRow(g, ratesX, clusterTop, net.LineH, net.ArrowColW, ArrowDown, net.DownSpeed, net.RateFont, UiTheme.Down);
-        DrawNetworkRateRow(g, ratesX, clusterTop + net.LineH + net.RowGap, net.LineH, net.ArrowColW, ArrowUp, net.UpSpeed, net.RateFont, UiTheme.Up);
+        DrawNetworkRateRow(g, ratesX, clusterTop, net.LineH, net.ArrowColW, net.RateTextW,
+            ArrowDown, net.DownSpeed, net.RateFont, UiTheme.Down);
+        DrawNetworkRateRow(g, ratesX, clusterTop + net.LineH + net.RowGap, net.LineH, net.ArrowColW, net.RateTextW,
+            ArrowUp, net.UpSpeed, net.RateFont, UiTheme.Up);
     }
 
     /// <summary>
@@ -1055,18 +1058,12 @@ internal sealed class PanelForm : Form
 
     private int EstimateBatteryWidth(Graphics g)
     {
-        string percent = _snap.BatteryPercent + "%";
         Font battFont = _fontBattery ?? _fontValue;
-        SizeF size = g.MeasureString(percent, battFont);
-        int icons = 0;
-        if ((_snap.AcKnown && _snap.PluggedIn) || (_snap.AcKnown && !_snap.PluggedIn))
-            icons++;
-        if (_snap.Charging)
-            icons++;
-        if (icons < 1)
-            icons = 1;
-        // Extra slack — GDI+ MeasureString under-reports slightly vs DrawString.
-        return (int)Math.Ceiling(size.Width) + icons * (Px(14) + Px(4)) + Px(8);
+        // Fixed slot (100% + icon pair) so 9%→100% and plug/bolt changes do not twitch the header.
+        SizeF size = g.MeasureString("100%", battFont);
+        int icon = Px(12);
+        int gap = Px(3);
+        return (int)Math.Ceiling(size.Width) + 2 * (icon + gap) + Px(4);
     }
 
     private void DrawHeaderBatteryLeft(Graphics g, int x, int y, int row, int rightLimit)
@@ -1076,9 +1073,21 @@ internal sealed class PanelForm : Form
         bool plug = _snap.AcKnown && _snap.PluggedIn;
         bool cell = _snap.AcKnown && !_snap.PluggedIn;
         bool bolt = _snap.Charging;
-        int s = Px(14);
-        int gap = Px(4);
-        int cursor = x;
+        int s = Px(12);
+        int gap = Px(3);
+        int slot = EstimateBatteryWidth(g);
+        if (x + slot > rightLimit)
+            slot = Math.Max(Px(40), rightLimit - x);
+        // Right-align the icon+% group inside the fixed slot.
+        SizeF pctSize = g.MeasureString(percent, battFont);
+        int pctW = (int)Math.Ceiling(pctSize.Width) + Px(1);
+        int iconsW = 0;
+        if (plug || cell)
+            iconsW += s + gap;
+        if (bolt)
+            iconsW += s + gap;
+        int groupW = iconsW + pctW;
+        int cursor = x + Math.Max(0, slot - groupW);
         int gy = y + (row - s) / 2;
         if (plug)
         {
@@ -1095,10 +1104,6 @@ internal sealed class PanelForm : Form
             DrawBolt(g, new Rectangle(cursor, gy, s, s), TextMuted);
             cursor += s + gap;
         }
-        SizeF size = g.MeasureString(percent, battFont);
-        int valueW = (int)Math.Ceiling(size.Width) + Px(2);
-        if (cursor + valueW > rightLimit)
-            valueW = Math.Max(Px(28), rightLimit - cursor);
         using (SolidBrush brush = new SolidBrush(TextMain))
         using (StringFormat fmt = new StringFormat())
         {
@@ -1106,7 +1111,7 @@ internal sealed class PanelForm : Form
             fmt.LineAlignment = StringAlignment.Center;
             fmt.FormatFlags = StringFormatFlags.NoWrap;
             fmt.Trimming = StringTrimming.None;
-            g.DrawString(percent, battFont, brush, new Rectangle(cursor, y, valueW, row), fmt);
+            g.DrawString(percent, battFont, brush, new Rectangle(cursor, y, pctW, row), fmt);
         }
     }
 
@@ -1155,12 +1160,13 @@ internal sealed class PanelForm : Form
 
     /// <summary>
     /// One rate line: arrow and speed share the same font + LineAlignment so they sit on one baseline.
-    /// Fixed arrow column keeps ↓/↑ numbers vertically column-aligned.
+    /// Fixed arrow + rate text columns keep ↓/↑ aligned and stop width twitch as digits change.
     /// </summary>
-    private static void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int arrowColW, string arrow, string speed, Font font, Color color)
+    private static void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int arrowColW, int rateTextW,
+        string arrow, string speed, Font font, Color color)
     {
         Rectangle arrowRect = new Rectangle(x, y, arrowColW, lineH);
-        Rectangle textRect = new Rectangle(x + arrowColW, y, 240, lineH);
+        Rectangle textRect = new Rectangle(x + arrowColW, y, rateTextW, lineH);
         using (SolidBrush brush = new SolidBrush(color))
         using (StringFormat arrowFmt = new StringFormat(StringFormat.GenericTypographic))
         using (StringFormat textFmt = new StringFormat(StringFormat.GenericTypographic))
@@ -1207,8 +1213,14 @@ internal sealed class PanelForm : Form
         string pct = _snap.CpuKnown ? Percent(_snap.CpuPercent) : "--";
         y = RestingGraph(g, x, y, inner, _snap.CpuHistory, Cpu, "CPU", pct,
             _snap.CpuTempKnown, _snap.CpuCelsius);
+        y = ProcessorSection(g, x, y, inner);
         if (_snap.ClockKnown)
             y = RestingFact(g, x, y, inner, "Clock", FormatGHz(_snap.ClockMHz));
+        if (_snap.CoreMHz != null && _snap.CoreMHz.Length > 0)
+        {
+            y = Caption(g, x, y, "Cores");
+            y = CoreGrid(g, x, y, inner, _snap.CoreMHz);
+        }
         return y + Px(6);
     }
 
