@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Windows.Forms;
 using Microsoft.Win32;
 
 internal static class SystemActions
@@ -119,6 +121,45 @@ internal static class SystemActions
         catch (Exception ex)
         {
             LastError = "Explorer restart failed";
+            Program.LogCrash(ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Relaunch this exe after a short delay so the single-instance mutex can release.
+    /// </summary>
+    public static bool RestartQuickView()
+    {
+        LastError = "";
+        try
+        {
+            string exe = Application.ExecutablePath;
+            if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
+            {
+                LastError = "QuickView path missing";
+                return false;
+            }
+            string dir = Path.GetDirectoryName(exe) ?? "";
+            string comspec = Environment.GetEnvironmentVariable("ComSpec");
+            if (string.IsNullOrEmpty(comspec))
+                comspec = "cmd.exe";
+            // Delay so this process exits and drops Local\QuickView before the new start.
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = comspec,
+                Arguments = "/c timeout /t 1 /nobreak >nul & start \"\" \"" + exe + "\"",
+                WorkingDirectory = dir,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                UseShellExecute = false
+            });
+            Application.Exit();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastError = "QuickView restart failed";
             Program.LogCrash(ex);
             return false;
         }
