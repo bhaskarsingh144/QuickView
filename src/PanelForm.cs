@@ -45,6 +45,7 @@ internal sealed class PanelForm : Form
     private bool _syncing;
     private float _dpi = 96f;
     private float _fit = 1f;
+    private float _textFit = 1f;
     private DisplayProfile _display;
     private int _textH;
     private int _scroll;
@@ -255,20 +256,21 @@ internal sealed class PanelForm : Form
         _display = DisplayScale.Measure(_dpi);
         _dpi = _display.Dpi;
         _fit = _display.Fit;
+        _textFit = _display.TextFit < 0.8f ? 0.8f : _display.TextFit;
     }
 
     private void RebuildFonts()
     {
-        float fit = Fit();
+        float text = FontEm();
         Font oldLabel = _fontLabel;
         Font oldValue = _fontValue;
         Font oldRate = _fontRate;
         Font oldLevel = _fontLevel;
-        _fontLabel = new Font("Segoe UI", 11f * fit, FontStyle.Regular, GraphicsUnit.Point);
-        _fontValue = new Font("Segoe UI", 12f * fit, FontStyle.Regular, GraphicsUnit.Point);
+        _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
+        _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
         // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
-        _fontRate = CreateMetricFont(10.5f * fit);
-        _fontLevel = CreateMetricFont(11f * fit);
+        _fontRate = CreateMetricFont(10.5f * text);
+        _fontLevel = CreateMetricFont(11f * text);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
@@ -310,6 +312,14 @@ internal sealed class PanelForm : Form
     private float Fit()
     {
         return _fit < 0.62f ? 0.62f : _fit;
+    }
+
+    private float FontEm()
+    {
+        float t = Fit() * _textFit;
+        if (t < 0.55f)
+            t = 0.55f;
+        return t;
     }
 
     private int Px(int dip)
@@ -498,7 +508,7 @@ internal sealed class PanelForm : Form
         if (!IsHandleCreated)
             return;
         if (_quickPopup == null || _quickPopup.IsDisposed)
-            _quickPopup = new QuickSettingsPopup(_audio, _dpi, Fit());
+            _quickPopup = new QuickSettingsPopup(_audio, _dpi, Fit(), _textFit);
         _quickPopup.ShowBesidePanel(Bounds);
         RaiseQuickPopup();
         _quickLeaveSince = DateTime.MinValue;
