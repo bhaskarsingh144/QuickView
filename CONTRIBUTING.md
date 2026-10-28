@@ -43,10 +43,13 @@ QuickView/
 ├── src/                       # C# source
 │   ├── Program.cs             # Entry point and startup
 │   ├── PanelForm.cs           # Main panel UI
+│   ├── ChromeLayout.cs        # Header/volume DIP layout + scale floors
+│   ├── DisplayScale.cs        # Fit / TextFit for panels
+│   ├── OpacityFade.cs         # Brightness preview + drawer fade
 │   ├── Sampler.cs             # Metrics sampling
 │   ├── QuickSettingsPopup.cs  # Quick settings drawer
 │   └── ...
-├── tests/                     # Unit tests
+├── tests/                     # Unit tests (see scripts/test.ps1)
 ├── scripts/
 │   ├── build.ps1              # Compile from source
 │   ├── test.ps1               # Run unit tests
@@ -77,7 +80,7 @@ Automated (no NuGet):
 .\scripts\test.ps1
 ```
 
-This compiles and runs unit tests under `tests/` (TextScale, SliderWheel, etc.).
+This compiles and runs unit tests under `tests/` (TextScale, SliderWheel, OpacityFade, DisplayScale, ChromeLayout). Manual matrices live in `docs/TEST-*.md`.
 
 Before submitting a pull request:
 1. Build successfully (`.\scripts\build.ps1`)

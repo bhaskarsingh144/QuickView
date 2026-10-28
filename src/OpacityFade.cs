@@ -6,13 +6,13 @@ using System;
 /// </summary>
 internal static class OpacityFade
 {
+    /// <summary>Quick-settings drawer resting opacity.</summary>
     public const double Normal = 0.98;
     /// <summary>Main panel resting opacity (PanelForm).</summary>
     public const double PanelNormal = 0.94;
     /// <summary>
-    /// Opacity floor while brightness-wheel preview is active.
-    /// Soft peek only — high enough that chrome stays readable while the desktop
-    /// brightness change is still visible (0.35 → ×1.35 → ×1.35).
+    /// Opacity floor while brightness-wheel preview is active on the main panel.
+    /// Soft peek (~0.64) so chrome stays readable while desktop brightness is visible.
     /// </summary>
     public const double Preview = 0.637875;
     public const int IdleMs = 650;

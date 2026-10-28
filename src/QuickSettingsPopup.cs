@@ -215,11 +215,10 @@ internal sealed class QuickSettingsPopup : Form
     private void RefreshState(bool force)
     {
         _lastPoll = DateTime.UtcNow;
-        float vol;
+        float volUnused;
         bool muted;
-        if (_audio.TryGetVolume(out vol, out muted))
+        if (_audio.TryGetVolume(out volUnused, out muted))
         {
-            _quick.Volume01 = vol;
             _quick.Muted = muted;
             if (force)
                 _quick.StatusLine = "";
