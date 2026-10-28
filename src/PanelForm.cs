@@ -1197,58 +1197,36 @@ internal sealed class PanelForm : Form
 
     private int Resting(Graphics g, int x, int y, int inner)
     {
+        // Glance only: CPU + Memory. GPU / Disk live behind metric chips.
         y = CpuSection(g, x, y, inner);
-        y = MemorySection(g, x, y, inner);
-        y = DiskSection(g, x, y, inner);
-        return GpuSection(g, x, y, inner);
+        return MemorySection(g, x, y, inner);
     }
 
     private int CpuSection(Graphics g, int x, int y, int inner)
     {
-        y = Heading(g, x, y, inner, "CPU", false, _snap.CpuTempKnown, _snap.CpuCelsius);
-        y = Graph(g, x, y, inner, _snap.CpuHistory, Cpu, false);
-        y = Fact(g, x, y, inner, "Usage", _snap.CpuKnown ? Percent(_snap.CpuPercent) : "--");
-        y = ProcessorFacts(g, x, y, inner);
+        string pct = _snap.CpuKnown ? Percent(_snap.CpuPercent) : "--";
+        y = RestingGraph(g, x, y, inner, _snap.CpuHistory, Cpu, "CPU", pct,
+            _snap.CpuTempKnown, _snap.CpuCelsius);
         if (_snap.ClockKnown)
-            y = Fact(g, x, y, inner, "Clock", FormatGHz(_snap.ClockMHz));
-        if (_snap.CoreMHz != null && _snap.CoreMHz.Length > 0)
-        {
-            y = Caption(g, x, y, "Cores");
-            y = CoreGrid(g, x, y, inner, _snap.CoreMHz);
-        }
-        return y;
+            y = RestingFact(g, x, y, inner, "Clock", FormatGHz(_snap.ClockMHz));
+        return y + Px(6);
     }
 
     private int MemorySection(Graphics g, int x, int y, int inner)
     {
-        y = Heading(g, x, y, inner, "Memory", true, _snap.MemTempKnown, _snap.MemCelsius);
-        y = Graph(g, x, y, inner, _snap.MemoryHistory, Mem, true);
+        string pct = "--";
         if (_snap.MemoryTotal > 0)
-            y = Fact(g, x, y, inner, "In use", FormatBytes(_snap.MemoryUsed) + " of " + FormatBytes(_snap.MemoryTotal));
+            pct = Percent(100f * (float)_snap.MemoryUsed / (float)_snap.MemoryTotal);
+        y = RestingGraph(g, x, y, inner, _snap.MemoryHistory, Mem, "Memory", pct,
+            _snap.MemTempKnown, _snap.MemCelsius);
+        if (_snap.MemoryTotal > 0)
+            y = RestingFact(g, x, y, inner, "In use", FormatBytes(_snap.MemoryUsed) + " of " + FormatBytes(_snap.MemoryTotal));
         if (_snap.CommitKnown)
-            y = Fact(g, x, y, inner, "Committed", FormatBytes(_snap.Committed) + " / " + FormatBytes(_snap.CommitLimit));
+            y = RestingFact(g, x, y, inner, "Committed", FormatBytes(_snap.Committed) + " / " + FormatBytes(_snap.CommitLimit));
         if (_snap.CachedKnown)
-            y = Fact(g, x, y, inner, "Cached", FormatBytes(_snap.Cached));
-        if (_snap.PoolKnown)
-        {
-            y = Fact(g, x, y, inner, "Paged pool", FormatBytes(_snap.PagedPool));
-            y = Fact(g, x, y, inner, "Nonpaged pool", FormatBytes(_snap.NonPagedPool));
-        }
+            y = RestingFact(g, x, y, inner, "Cached", FormatBytes(_snap.Cached));
+        // Pools stay on Memory detail (chip view).
         return ModuleFacts(g, x, y, inner);
-    }
-
-    private int GpuSection(Graphics g, int x, int y, int inner)
-    {
-        y = Heading(g, x, y, inner, "GPU", true, _snap.GpuTempKnown, _snap.GpuCelsius);
-        if (!_snap.GpuKnown)
-            return Fact(g, x, y, inner, "GPU", "Counters are not available");
-        y = Fact(g, x, y, inner, "Usage", Percent(_snap.GpuPercent));
-        y = Graph(g, x, y, inner, _snap.GpuHistory, Gpu, true);
-        if (_snap.GpuMemoryKnown)
-            y = Fact(g, x, y, inner, "Dedicated", FormatBytes(_snap.GpuMemoryUsed));
-        if (_snap.GpuSharedKnown)
-            y = Fact(g, x, y, inner, "Shared", FormatBytes(_snap.GpuShared));
-        return y;
     }
 
     private int CpuDetail(Graphics g, int x, int y, int inner)
@@ -1312,23 +1290,6 @@ internal sealed class PanelForm : Form
             y = Fact(g, x, y, inner, "Dedicated", FormatBytes(_snap.GpuMemoryUsed));
         if (_snap.GpuSharedKnown)
             y = Fact(g, x, y, inner, "Shared", FormatBytes(_snap.GpuShared));
-        return y;
-    }
-
-    private int DiskSection(Graphics g, int x, int y, int inner)
-    {
-        y = Heading(g, x, y, inner, "Disk", true);
-        if (!_snap.DiskKnown && !_snap.DiskSpaceKnown)
-            return Fact(g, x, y, inner, "Disk", "Counters are not available");
-        if (_snap.DiskKnown)
-            y = Graph(g, x, y, inner, _snap.DiskHistory, TextMain, true);
-        if (_snap.DiskSpaceKnown)
-            y = Fact(g, x, y, inner, "In use", FormatBytes(_snap.DiskUsed) + " of " + FormatBytes(_snap.DiskTotal));
-        if (_snap.DiskKnown)
-        {
-            y = Fact(g, x, y, inner, "Read", FormatRate(_snap.DiskReadMBps));
-            y = Fact(g, x, y, inner, "Write", FormatRate(_snap.DiskWriteMBps));
-        }
         return y;
     }
 
@@ -1407,35 +1368,6 @@ internal sealed class PanelForm : Form
         if (celsius >= 70)
             return TempWarm;
         return TempCool;
-    }
-
-    private int ProcessorFacts(Graphics g, int x, int y, int inner)
-    {
-        bool named = !string.IsNullOrEmpty(_snap.CpuName);
-        bool cores = _snap.CpuCores > 0 && _snap.CpuThreads > 0;
-        bool rated = _snap.CpuMaxMHz > 0 && _snap.CpuL3Kb > 0;
-        if (!named && !cores && !rated)
-            return y;
-        if (named)
-        {
-            if (g != null)
-            {
-                using (SolidBrush brush = new SolidBrush(TextMain))
-                using (StringFormat fmt = CenterFormat())
-                {
-                    Rectangle box = new Rectangle(x, y, inner, _textH);
-                    g.DrawString(_snap.CpuName, _fontValue, brush, box, fmt);
-                }
-            }
-            y += _textH + Px(8);
-        }
-        int gap = Px(16);
-        int half = (inner - gap) / 2;
-        if (cores)
-            y = PairRow(g, x, y, half, gap, "Cores", _snap.CpuCores.ToString(), "Threads", _snap.CpuThreads.ToString());
-        if (rated)
-            y = PairRow(g, x, y, half, gap, "Rated", FormatGHz(_snap.CpuMaxMHz), "L3", FormatCache(_snap.CpuL3Kb));
-        return y;
     }
 
     private int ModuleFacts(Graphics g, int x, int y, int inner)
@@ -1545,6 +1477,14 @@ internal sealed class PanelForm : Form
         return y + _textH + Px(8);
     }
 
+    /// <summary>Tighter fact row for the no-scroll resting overview.</summary>
+    private int RestingFact(Graphics g, int x, int y, int inner, string label, string value)
+    {
+        if (g != null)
+            TextPair(g, x, y, inner, label, value, false);
+        return y + _textH + Px(5);
+    }
+
     private int ProcessorSection(Graphics g, int x, int y, int inner)
     {
         bool named = !string.IsNullOrEmpty(_snap.CpuName);
@@ -1613,11 +1553,71 @@ internal sealed class PanelForm : Form
 
     private int Graph(Graphics g, int x, int y, int inner, float[] values, Color color, bool rangeLabel)
     {
+        return DrawGraph(g, x, y, inner, values, color, rangeLabel, null, null, false, 0, Px(12));
+    }
+
+    /// <summary>
+    /// Resting sparkline with title + current % (+ temp) in the graph chrome — no separate heading row.
+    /// </summary>
+    private int RestingGraph(Graphics g, int x, int y, int inner, float[] values, Color color,
+        string title, string percentText, bool tempKnown, int celsius)
+    {
+        return DrawGraph(g, x, y, inner, values, color, false, title, percentText, tempKnown, celsius, Px(8));
+    }
+
+    private int DrawGraph(Graphics g, int x, int y, int inner, float[] values, Color color, bool rangeLabel,
+        string title, string percentText, bool tempKnown, int celsius, int afterGap)
+    {
         int h = Px(78);
         Rectangle bounds = new Rectangle(x, y, inner, h);
+        bool chrome = !string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(percentText) || tempKnown;
         if (g != null)
         {
             FillRound(g, bounds, Px(8), Track);
+            int chromeBottom = bounds.Top + Px(4);
+            if (chrome)
+            {
+                int pad = Px(8);
+                int top = bounds.Top + Px(4);
+                int cursor = bounds.Right - pad;
+                int cluster = 0;
+                if (!string.IsNullOrEmpty(percentText))
+                {
+                    SizeF pctSize = g.MeasureString(percentText, _fontValue);
+                    int pctW = (int)Math.Ceiling(pctSize.Width);
+                    cursor -= pctW;
+                    using (SolidBrush brush = new SolidBrush(TextMain))
+                        g.DrawString(percentText, _fontValue, brush, cursor, top);
+                    cluster += pctW;
+                }
+                if (tempKnown)
+                {
+                    string tempText = celsius.ToString() + " \u00b0C";
+                    SizeF tempSize = g.MeasureString(tempText, _fontLabel);
+                    int tempW = (int)Math.Ceiling(tempSize.Width);
+                    if (cluster > 0)
+                        cursor -= Px(8);
+                    cursor -= tempW;
+                    using (SolidBrush brush = new SolidBrush(TempInk(celsius)))
+                        g.DrawString(tempText, _fontLabel, brush, cursor, top);
+                    cluster += tempW + (cluster > 0 ? Px(8) : 0);
+                }
+                if (!string.IsNullOrEmpty(title))
+                {
+                    int titleMax = Math.Max(Px(24), inner - pad * 2 - cluster - Px(8));
+                    Rectangle titleBox = new Rectangle(bounds.X + pad, top, titleMax, _textH);
+                    using (SolidBrush brush = new SolidBrush(TextMain))
+                    using (StringFormat left = new StringFormat())
+                    {
+                        left.Alignment = StringAlignment.Near;
+                        left.LineAlignment = StringAlignment.Near;
+                        left.FormatFlags = StringFormatFlags.NoWrap;
+                        left.Trimming = StringTrimming.EllipsisCharacter;
+                        g.DrawString(title, _fontLabel, brush, titleBox, left);
+                    }
+                }
+                chromeBottom = top + Math.Max(_textH, (int)Math.Ceiling(_fontValue.GetHeight()));
+            }
             if (values != null && values.Length >= 2)
             {
                 float max = 100f;
@@ -1625,6 +1625,10 @@ internal sealed class PanelForm : Form
                 float step = (bounds.Width - Px(16)) / (float)(values.Length - 1);
                 float lo = values[0];
                 float hi = values[0];
+                int topPad = chrome ? Math.Max(Px(22), chromeBottom - bounds.Top + Px(4)) : Px(12);
+                float plotH = bounds.Height - topPad - Px(8);
+                if (plotH < Px(24))
+                    plotH = Px(24);
                 for (int i = 0; i < values.Length; i++)
                 {
                     float v = values[i];
@@ -1632,10 +1636,10 @@ internal sealed class PanelForm : Form
                     if (v > max) v = max;
                     if (v < lo) lo = v;
                     if (v > hi) hi = v;
-                    float py = bounds.Bottom - Px(8) - (bounds.Height - Px(20)) * (v / max);
+                    float py = bounds.Bottom - Px(8) - plotH * (v / max);
                     pts[i] = new PointF(bounds.X + Px(8) + step * i, py);
                 }
-                int mid = bounds.Top + (bounds.Height / 2);
+                int mid = bounds.Top + topPad + (int)(plotH / 2f);
                 using (Pen grid = new Pen(Color.FromArgb(80, Line), 1f))
                     g.DrawLine(grid, bounds.Left + Px(8), mid, bounds.Right - Px(8), mid);
                 PointF[] area = new PointF[pts.Length + 2];
@@ -1650,7 +1654,7 @@ internal sealed class PanelForm : Form
                     pen.LineJoin = LineJoin.Round;
                     g.DrawLines(pen, pts);
                 }
-                if (rangeLabel)
+                if (rangeLabel && !chrome)
                 {
                     string span = ((int)Math.Round(lo)).ToString() + "-" + ((int)Math.Round(hi)).ToString() + "%";
                     SizeF size = g.MeasureString(span, _fontLabel);
@@ -1659,7 +1663,7 @@ internal sealed class PanelForm : Form
                 }
             }
         }
-        return y + h + Px(12);
+        return y + h + afterGap;
     }
 
     private int CoreGrid(Graphics g, int x, int y, int inner, int[] mhz)

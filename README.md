@@ -2,7 +2,7 @@
 
 **A lightweight system monitor for the right edge of your Windows desktop.**
 
-Live CPU, memory, GPU, and disk metrics at a glance — with brightness and volume on the main chrome, plus a quick settings drawer for text scale and everyday system actions. No installer required. No telemetry. Runs locally.
+Live CPU and memory at a glance on the resting panel — GPU and disk behind metric chips — with brightness and volume on the main chrome, plus a quick settings drawer for text scale and everyday system actions. No installer required. No telemetry. Runs locally.
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.5%2B-512BD4?style=flat-square)
@@ -30,13 +30,14 @@ Live CPU, memory, GPU, and disk metrics at a glance — with brightness and volu
 
 ### Real-time monitoring
 
-- **CPU** — usage %, processor name, cores/threads, rated and live clock, per-core clocks, optional temperature
-- **Memory** — in-use (Task Manager–aligned), committed, cached, paged/non-paged pools, module info, optional temperature
-- **GPU** — 3D engine usage (capped at 100%), dedicated and shared adapter memory, optional temperature
-- **Disk** — busy time, space in use, read/write rates, physical drive names/size/media type
+- **Resting overview** — compact CPU + Memory graphs (title, current %, optional temp in the graph chrome); no scrollbar. Live clock on CPU; in-use / committed / cached + modules on Memory
+- **CPU chip** — usage %, processor name, cores/threads, rated and live clock, per-core clocks, optional temperature, top processes
+- **Memory chip** — in-use (Task Manager–aligned), committed, cached, paged/non-paged pools, module info, optional temperature, Trim, top processes
+- **GPU chip** — 3D engine usage (capped at 100%), dedicated and shared adapter memory, optional temperature
+- **Disk chip** — busy time, space in use, read/write rates, physical drive names/size/media type
 - **60-second history graphs** on the resting page and in every metric view
-- **Process lists** on CPU and Memory views, color-coded (system / Windows apps / installed apps)
-- **Memory Trim** — shrinks background working sets without closing apps
+- **Process lists** on CPU and Memory detail views, color-coded (system / Windows apps / installed apps)
+- **Memory Trim** — shrinks background working sets without closing apps (Memory detail)
 
 ### Status header / chrome
 
@@ -111,7 +112,7 @@ Runs unit tests (TextScale, SliderWheel, OpacityFade, DisplayScale). Manual matr
 | Virtual desktops | Same panel on every desktop |
 | Show Desktop | Panel returns when the desktop is showing |
 
-**Metric chips** — click CPU, Memory, GPU, or Disk for a detailed view; click again to return to the resting page.
+**Metric chips** — resting shows CPU + Memory only; click CPU, Memory, GPU, or Disk for a detailed view; click again to return to the resting page.
 
 **Quick settings** — drawer control on the left edge of the panel (tile grid; hover opens instantly with a short fade-in). Esc or leave the drawer to close (brief leave grace).
 
