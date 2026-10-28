@@ -65,9 +65,12 @@ internal sealed class PanelForm : Form
     private readonly AudioControl _audio = new AudioControl();
     private readonly BrightnessControl _brightness = new BrightnessControl();
     private QuickSettingsPopup _quickPopup;
-    private DateTime _quickHoverSince = DateTime.MinValue;
     private DateTime _quickLeaveSince = DateTime.MinValue;
+    /// <summary>After click/Esc close, skip hover-reopen until the pointer leaves the drawer hit.</summary>
+    private bool _quickSuppressHoverOpen;
     private bool _chevronHot;
+    /// <summary>Leave dwell before auto-hiding the drawer (open is immediate).</summary>
+    private const int DrawerLeaveMs = 280;
     private bool _wifiHot;
     private Rectangle _chevronHit;
     private QuickHit _hover = QuickHit.None;
@@ -273,7 +276,8 @@ internal sealed class PanelForm : Form
         _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
         _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
         // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
-        _fontRate = CreateMetricFont(10.5f * text);
+        // ~35% larger than the original 10.5pt so Wi-Fi + rates read clearly in the header.
+        _fontRate = CreateMetricFont(14.2f * text);
         _fontLevel = CreateMetricFont(11f * text);
         _fontBattery = CreateMetricFont(12f * text);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
@@ -485,14 +489,12 @@ internal sealed class PanelForm : Form
         if (overChevron)
         {
             _quickLeaveSince = DateTime.MinValue;
-            if (_quickHoverSince == DateTime.MinValue)
-                _quickHoverSince = DateTime.UtcNow;
-            else if ((_quickPopup == null || !_quickPopup.Visible)
-                && (DateTime.UtcNow - _quickHoverSince).TotalMilliseconds >= 280)
+            // Open immediately — no dwell. Suppress only after intentional close while still hot.
+            if (!_quickSuppressHoverOpen && (_quickPopup == null || !_quickPopup.Visible))
                 OpenQuickPopup();
         }
         else
-            _quickHoverSince = DateTime.MinValue;
+            _quickSuppressHoverOpen = false;
 
         if (_quickPopup != null && _quickPopup.Visible)
         {
@@ -502,8 +504,8 @@ internal sealed class PanelForm : Form
             {
                 if (_quickLeaveSince == DateTime.MinValue)
                     _quickLeaveSince = DateTime.UtcNow;
-                else if ((DateTime.UtcNow - _quickLeaveSince).TotalMilliseconds >= 200)
-                    CloseQuickPopup();
+                else if ((DateTime.UtcNow - _quickLeaveSince).TotalMilliseconds >= DrawerLeaveMs)
+                    CloseQuickPopup(false);
             }
         }
         if (wasHot != _chevronHot)
@@ -514,6 +516,7 @@ internal sealed class PanelForm : Form
     {
         if (!IsHandleCreated)
             return;
+        _quickSuppressHoverOpen = false;
         if (_quickPopup == null || _quickPopup.IsDisposed)
             _quickPopup = new QuickSettingsPopup(_audio, _dpi, Fit(), _textFit);
         _quickPopup.ShowBesidePanel(Bounds);
@@ -522,12 +525,20 @@ internal sealed class PanelForm : Form
         Invalidate();
     }
 
-    private void CloseQuickPopup()
+    /// <param name="intentional">Click/Esc/chip — suppress hover-reopen until pointer leaves the hit.</param>
+    private void CloseQuickPopup(bool intentional)
     {
         if (_quickPopup != null && !_quickPopup.IsDisposed && _quickPopup.Visible)
             _quickPopup.HidePopup();
         _quickLeaveSince = DateTime.MinValue;
+        if (intentional)
+            _quickSuppressHoverOpen = true;
         Invalidate();
+    }
+
+    private void CloseQuickPopup()
+    {
+        CloseQuickPopup(true);
     }
 
     private bool QuickPopupOpen()
@@ -544,7 +555,7 @@ internal sealed class PanelForm : Form
     private void ToggleQuickPopup()
     {
         if (QuickPopupOpen())
-            CloseQuickPopup();
+            CloseQuickPopup(true);
         else
             OpenQuickPopup();
     }
@@ -847,7 +858,8 @@ internal sealed class PanelForm : Form
 
     private int Header(Graphics g, int x, int y, int inner)
     {
-        int row = Px(44);
+        // Room for ~35% larger network cluster (Wi-Fi square tracks rate stack height).
+        int row = Px(56);
         if (g != null)
         {
             DrawStatus(g, x, y, inner, row);
@@ -870,8 +882,7 @@ internal sealed class PanelForm : Form
         int gap = Px(6);
         int right = x + inner;
         int padY = Px(4);
-        int chevGlyph = Px(18);
-        int chevReserve = Math.Max(Px(40), chevGlyph + Px(16)); // minimum left zone before network
+        int chevReserve = Math.Max(Px(44), row); // minimum left zone before network
 
         // 1) Battery flush right
         int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
@@ -886,18 +897,17 @@ internal sealed class PanelForm : Form
             wifiLeft = minWifiLeft;
         int clusterTop = y + Math.Max(0, (row - net.RatesH) / 2);
 
-        // 3) Chevron hit = leftover left space (full row height) up to the network cluster
+        // 3) Drawer hit = leftover left space; glyph fills that rect symmetrically
         int chevRight = Math.Max(x + chevReserve, wifiLeft - gap);
         _chevronHit = new Rectangle(x, y, Math.Max(chevReserve, chevRight - x), row);
         bool open = QuickPopupOpen();
         if (_chevronHot || open)
             FillRound(g, _chevronHit, Px(8), UiTheme.Hover);
-        Rectangle chevGlyphRect = new Rectangle(
-            _chevronHit.X + Px(4),
-            _chevronHit.Y + (_chevronHit.Height - chevGlyph) / 2,
-            chevGlyph,
-            chevGlyph);
-        DrawHeaderChevron(g, chevGlyphRect, open, open || _chevronHot ? TextMain : TextMuted);
+        int facePad = Math.Max(Px(4), Math.Min(_chevronHit.Width, _chevronHit.Height) / 10);
+        Rectangle drawerFace = Rectangle.Inflate(_chevronHit, -facePad, -facePad);
+        if (drawerFace.Width < Px(18) || drawerFace.Height < Px(18))
+            drawerFace = _chevronHit;
+        DrawHeaderDrawerGlyph(g, drawerFace, open || _chevronHot ? TextMain : TextMuted);
 
         // 4) Network cluster
         _wifiHit = new Rectangle(wifiLeft - Px(2), y, net.Width + Px(4), row);
@@ -942,8 +952,8 @@ internal sealed class PanelForm : Form
         const string ArrowDown = "\u2193";
         const string ArrowUp = "\u2191";
         net.RateFont = _fontRate ?? _fontLabel;
-        net.LineH = Math.Max(Px(12), (int)Math.Ceiling(net.RateFont.GetHeight()));
-        net.RowGap = Math.Max(1, Px(2));
+        net.LineH = Math.Max(Px(14), (int)Math.Ceiling(net.RateFont.GetHeight()));
+        net.RowGap = Math.Max(2, Px(3));
         SizeF arrowDownSize;
         SizeF arrowUpSize;
         SizeF dSize;
@@ -956,18 +966,18 @@ internal sealed class PanelForm : Form
             dSize = g.MeasureString(net.DownSpeed, net.RateFont, int.MaxValue, measure);
             uSize = g.MeasureString(net.UpSpeed, net.RateFont, int.MaxValue, measure);
         }
-        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
+        net.ArrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(5);
         int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
         int rateColW = net.ArrowColW + textW;
         net.RatesH = net.LineH * 2 + net.RowGap;
-        int maxSide = row - Px(2);
+        int maxSide = row - Px(4);
         if (net.RatesH > maxSide)
         {
-            net.LineH = Math.Max(Px(10), (maxSide - net.RowGap) / 2);
+            net.LineH = Math.Max(Px(12), (maxSide - net.RowGap) / 2);
             net.RatesH = net.LineH * 2 + net.RowGap;
         }
         net.Wifi = net.RatesH;
-        net.ClusterGap = Px(6);
+        net.ClusterGap = Px(8);
         net.Width = net.Wifi + net.ClusterGap + rateColW;
         return net;
     }
@@ -983,27 +993,64 @@ internal sealed class PanelForm : Form
         DrawNetworkRateRow(g, ratesX, clusterTop + net.LineH + net.RowGap, net.LineH, net.ArrowColW, ArrowUp, net.UpSpeed, net.RateFont, UiTheme.Up);
     }
 
-    private static void DrawHeaderChevron(Graphics g, Rectangle r, bool pointRight, Color ink)
+    /// <summary>
+    /// Quick-settings control that fills the drawer hit zone: rounded plate + centered 2×2
+    /// tile grid. No open/close caret — drawer auto-dismisses; hover fill is the affordance.
+    /// </summary>
+    private static void DrawHeaderDrawerGlyph(Graphics g, Rectangle r, Color ink)
     {
-        using (Pen pen = new Pen(ink, 1.7f))
+        if (r.Width < 4 || r.Height < 4)
+            return;
+
+        SmoothingMode prev = g.SmoothingMode;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        int radius = Math.Max(4, Math.Min(r.Width, r.Height) / 5);
+        float plateStroke = Math.Max(1.5f, Math.Min(r.Width, r.Height) * 0.04f);
+        using (Pen platePen = new Pen(Color.FromArgb(120, ink), plateStroke))
+        using (GraphicsPath path = Round(r, radius))
+            g.DrawPath(platePen, path);
+
+        // Content sits in the largest centered square inside the plate (symmetric in a wide hit).
+        int contentPad = Math.Max(3, Math.Min(r.Width, r.Height) / 6);
+        int side = Math.Min(r.Width, r.Height) - contentPad * 2;
+        if (side < 8)
+            side = Math.Min(r.Width, r.Height) - 2;
+        if (side < 4)
         {
-            pen.StartCap = LineCap.Round;
-            pen.EndCap = LineCap.Round;
-            int cx = r.X + r.Width / 2;
-            int cy = r.Y + r.Height / 2;
-            int dx = Math.Max(3, r.Width / 5);
-            int dy = Math.Max(4, r.Height / 4);
-            if (pointRight)
+            g.SmoothingMode = prev;
+            return;
+        }
+        Rectangle content = new Rectangle(
+            r.X + (r.Width - side) / 2,
+            r.Y + (r.Height - side) / 2,
+            side,
+            side);
+
+        int gap = Math.Max(3, side / 8);
+        int cell = (side - gap) / 2;
+        if (cell < 3)
+            cell = 3;
+        int grid = cell * 2 + gap;
+        int gx = content.X + (content.Width - grid) / 2;
+        int gy = content.Y + (content.Height - grid) / 2;
+        int tileR = Math.Max(2, cell / 4);
+        using (SolidBrush brush = new SolidBrush(ink))
+        {
+            for (int row = 0; row < 2; row++)
             {
-                g.DrawLine(pen, cx - dx / 2, cy - dy, cx + dx / 2, cy);
-                g.DrawLine(pen, cx - dx / 2, cy + dy, cx + dx / 2, cy);
-            }
-            else
-            {
-                g.DrawLine(pen, cx + dx / 2, cy - dy, cx - dx / 2, cy);
-                g.DrawLine(pen, cx + dx / 2, cy + dy, cx - dx / 2, cy);
+                for (int col = 0; col < 2; col++)
+                {
+                    Rectangle tile = new Rectangle(
+                        gx + col * (cell + gap),
+                        gy + row * (cell + gap),
+                        cell,
+                        cell);
+                    using (GraphicsPath tilePath = Round(tile, tileR))
+                        g.FillPath(brush, tilePath);
+                }
             }
         }
+        g.SmoothingMode = prev;
     }
 
     private int EstimateBatteryWidth(Graphics g)
@@ -1985,6 +2032,14 @@ internal sealed class PanelForm : Form
         _batteryHot = _batteryHit.Contains(p);
         _brightHover = BrightnessStripContains(p);
         _volHover = VolumeColumnContains(p);
+
+        // MouseMove path: open drawer immediately (same rules as TickQuickPopup).
+        if (_chevronHot)
+        {
+            _quickLeaveSince = DateTime.MinValue;
+            if (!_quickSuppressHoverOpen && !QuickPopupOpen())
+                OpenQuickPopup();
+        }
 
         bool hand = _wifiHot || _chevronHot || _batteryHot || _brightHover || _volHover
             || _chipHoverCpu || _chipHoverMem || _chipHoverGpu || _chipHoverDisk || _trimHover;

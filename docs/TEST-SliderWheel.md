@@ -17,7 +17,7 @@ Automated: `.\scripts\test.ps1` (SliderWheel suite).
 | B1 Hover strip, scroll up | | +1% |
 | B2 Hover strip, scroll down | | −1% |
 | B3 Clamp at 0 / 100 | | |
-| B4 While scrolling | | Panel soft-dims |
+| B4 While scrolling | | Panel soft-dims to Preview floor (~0.64); still readable |
 | B5 Pointer off strip | | Wheel does not change brightness |
 
 ## C. Volume (main panel)
