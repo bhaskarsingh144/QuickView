@@ -829,34 +829,45 @@ internal sealed class PanelForm : Form
             chevGlyph);
         DrawHeaderChevron(g, chevGlyphRect, open, open || _chevronHot ? TextMain : TextMuted);
 
-        // Network block: Wi-Fi | stacked rates. Arrow box height == text line height so they share one band.
+        // Battery first so the network cluster can center in the mid band (chevron … battery).
+        int battW = _snap.BatteryKnown ? EstimateBatteryWidth(g) : 0;
+        int battLeft = _snap.BatteryKnown ? right - battW : right;
+        int midLeft = _chevronHit.Right + Px(6);
+        int midRight = _snap.BatteryKnown ? battLeft - gap - Px(4) : right;
+
+        // Rates: Unicode arrows in the same font as speeds → one baseline (no separate glyph vs text drift).
         float down = _snap.NetKnown ? _snap.DownMBps : 0f;
         float up = _snap.NetKnown ? _snap.UpMBps : 0f;
-        string dText = down.ToString("0.00") + " MB/s";
-        string uText = up.ToString("0.00") + " MB/s";
+        string dSpeed = down.ToString("0.00") + " MB/s";
+        string uSpeed = up.ToString("0.00") + " MB/s";
+        const string ArrowDown = "\u2193"; // ↓
+        const string ArrowUp = "\u2191";   // ↑
         Font rateFont = _fontRate ?? _fontLabel;
         int lineH = Math.Max(Px(12), (int)Math.Ceiling(rateFont.GetHeight()));
-        int rateIcon = lineH; // square matching the speed line — not a tiny glyph beside taller text
         int rowGap = Math.Max(1, Px(2));
-        int textGap = Px(4);
+        SizeF arrowDownSize;
+        SizeF arrowUpSize;
         SizeF dSize;
         SizeF uSize;
         using (StringFormat measure = new StringFormat(StringFormat.GenericTypographic))
         {
             measure.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
-            dSize = g.MeasureString(dText, rateFont, int.MaxValue, measure);
-            uSize = g.MeasureString(uText, rateFont, int.MaxValue, measure);
+            arrowDownSize = g.MeasureString(ArrowDown, rateFont, int.MaxValue, measure);
+            arrowUpSize = g.MeasureString(ArrowUp, rateFont, int.MaxValue, measure);
+            dSize = g.MeasureString(dSpeed, rateFont, int.MaxValue, measure);
+            uSize = g.MeasureString(uSpeed, rateFont, int.MaxValue, measure);
         }
+        int arrowColW = Math.Max((int)Math.Ceiling(arrowDownSize.Width), (int)Math.Ceiling(arrowUpSize.Width)) + Px(4);
         int textW = Math.Max((int)Math.Ceiling(dSize.Width), (int)Math.Ceiling(uSize.Width));
-        int rateColW = rateIcon + textGap + textW;
+        int rateColW = arrowColW + textW;
         int ratesH = lineH * 2 + rowGap;
-        // Wi-Fi matches the rates stack height so the whole network cluster is one symmetric block.
-        int wifi = Math.Min(ratesH, row - Px(2));
-        if (wifi < Px(20))
-            wifi = Math.Min(Px(20), row - Px(2));
-        int clusterGap = Px(8);
+        int wifi = Math.Min(ratesH, row - Px(4));
+        if (wifi < Px(18))
+            wifi = Math.Min(Px(18), row - Px(4));
+        int clusterGap = Px(6);
         int netW = wifi + clusterGap + rateColW;
-        int wifiLeft = _chevronHit.Right + Px(6);
+        int midW = Math.Max(0, midRight - midLeft);
+        int wifiLeft = midLeft + Math.Max(0, (midW - netW) / 2);
         int clusterTop = y + Math.Max(0, (row - Math.Max(wifi, ratesH)) / 2);
         _wifiHit = new Rectangle(wifiLeft - Px(2), y, netW + Px(4), row);
         if (_wifiHot)
@@ -865,14 +876,11 @@ internal sealed class PanelForm : Form
             _snap.WifiUp || _snap.NetKnown, true);
         int ratesX = wifiLeft + wifi + clusterGap;
         int ratesY = clusterTop + (Math.Max(wifi, ratesH) - ratesH) / 2;
-        DrawNetworkRateRow(g, ratesX, ratesY, lineH, rateIcon, textGap, dText, rateFont, UiTheme.Down, true);
-        DrawNetworkRateRow(g, ratesX, ratesY + lineH + rowGap, lineH, rateIcon, textGap, uText, rateFont, UiTheme.Up, false);
+        DrawNetworkRateRow(g, ratesX, ratesY, lineH, arrowColW, ArrowDown, dSpeed, rateFont, UiTheme.Down);
+        DrawNetworkRateRow(g, ratesX, ratesY + lineH + rowGap, lineH, arrowColW, ArrowUp, uSpeed, rateFont, UiTheme.Up);
 
-        // Compact battery: icons + percent, reserved from the right.
         if (_snap.BatteryKnown)
         {
-            int battW = EstimateBatteryWidth(g);
-            int battLeft = right - battW;
             int divX = Math.Max(_wifiHit.Right + gap, battLeft - Px(4));
             using (Pen pen = new Pen(Line, 1f))
                 g.DrawLine(pen, divX, y + padY, divX, y + row - padY);
@@ -1006,81 +1014,25 @@ internal sealed class PanelForm : Form
     }
 
     /// <summary>
-    /// One network rate line: arrow square is the same height as the text band.
+    /// One rate line: arrow and speed share the same font + LineAlignment so they sit on one baseline.
+    /// Fixed arrow column keeps ↓/↑ numbers vertically column-aligned.
     /// </summary>
-    private void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int icon, int textGap, string text, Font font, Color color, bool down)
+    private static void DrawNetworkRateRow(Graphics g, int x, int y, int lineH, int arrowColW, string arrow, string speed, Font font, Color color)
     {
-        Rectangle iconRect = new Rectangle(x, y + (lineH - icon) / 2, icon, icon);
-        if (down)
-            DrawDown(g, iconRect, color);
-        else
-            DrawUp(g, iconRect, color);
-        Rectangle textRect = new Rectangle(x + icon + textGap, y, Px(180), lineH);
+        Rectangle arrowRect = new Rectangle(x, y, arrowColW, lineH);
+        Rectangle textRect = new Rectangle(x + arrowColW, y, 240, lineH);
         using (SolidBrush brush = new SolidBrush(color))
-        using (StringFormat fmt = new StringFormat(StringFormat.GenericTypographic))
+        using (StringFormat arrowFmt = new StringFormat(StringFormat.GenericTypographic))
+        using (StringFormat textFmt = new StringFormat(StringFormat.GenericTypographic))
         {
-            fmt.Alignment = StringAlignment.Near;
-            fmt.LineAlignment = StringAlignment.Center;
-            fmt.FormatFlags |= StringFormatFlags.NoWrap;
-            fmt.Trimming = StringTrimming.None;
-            g.DrawString(text, font, brush, textRect, fmt);
-        }
-    }
-
-    private static void DrawDown(Graphics g, Rectangle r, Color color)
-    {
-        // Filled arrow centered in the square — matches digit band better than stroke glyphs.
-        float padX = r.Width * 0.22f;
-        float padY = r.Height * 0.14f;
-        float left = r.Left + padX;
-        float right = r.Right - padX;
-        float top = r.Top + padY;
-        float bot = r.Bottom - padY;
-        float cx = (left + right) / 2f;
-        float stemW = Math.Max(1.5f, r.Width * 0.18f);
-        float headY = top + (bot - top) * 0.42f;
-        using (SolidBrush brush = new SolidBrush(color))
-        using (GraphicsPath path = new GraphicsPath())
-        {
-            path.AddPolygon(new PointF[]
-            {
-                new PointF(cx - stemW / 2f, top),
-                new PointF(cx + stemW / 2f, top),
-                new PointF(cx + stemW / 2f, headY),
-                new PointF(right, headY),
-                new PointF(cx, bot),
-                new PointF(left, headY),
-                new PointF(cx - stemW / 2f, headY)
-            });
-            g.FillPath(brush, path);
-        }
-    }
-
-    private static void DrawUp(Graphics g, Rectangle r, Color color)
-    {
-        float padX = r.Width * 0.22f;
-        float padY = r.Height * 0.14f;
-        float left = r.Left + padX;
-        float right = r.Right - padX;
-        float top = r.Top + padY;
-        float bot = r.Bottom - padY;
-        float cx = (left + right) / 2f;
-        float stemW = Math.Max(1.5f, r.Width * 0.18f);
-        float headY = bot - (bot - top) * 0.42f;
-        using (SolidBrush brush = new SolidBrush(color))
-        using (GraphicsPath path = new GraphicsPath())
-        {
-            path.AddPolygon(new PointF[]
-            {
-                new PointF(cx - stemW / 2f, bot),
-                new PointF(cx + stemW / 2f, bot),
-                new PointF(cx + stemW / 2f, headY),
-                new PointF(right, headY),
-                new PointF(cx, top),
-                new PointF(left, headY),
-                new PointF(cx - stemW / 2f, headY)
-            });
-            g.FillPath(brush, path);
+            arrowFmt.Alignment = StringAlignment.Center;
+            arrowFmt.LineAlignment = StringAlignment.Center;
+            arrowFmt.FormatFlags |= StringFormatFlags.NoWrap;
+            textFmt.Alignment = StringAlignment.Near;
+            textFmt.LineAlignment = StringAlignment.Center;
+            textFmt.FormatFlags |= StringFormatFlags.NoWrap;
+            g.DrawString(arrow, font, brush, arrowRect, arrowFmt);
+            g.DrawString(speed, font, brush, textRect, textFmt);
         }
     }
 
