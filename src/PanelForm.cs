@@ -1078,7 +1078,7 @@ internal sealed class PanelForm : Form
         int slot = EstimateBatteryWidth(g);
         if (x + slot > rightLimit)
             slot = Math.Max(Px(40), rightLimit - x);
-        // Right-align the icon+% group inside the fixed slot.
+        // Center the icon+% group inside the fixed slot (symmetric in the battery hit).
         SizeF pctSize = g.MeasureString(percent, battFont);
         int pctW = (int)Math.Ceiling(pctSize.Width) + Px(1);
         int iconsW = 0;
@@ -1087,7 +1087,7 @@ internal sealed class PanelForm : Form
         if (bolt)
             iconsW += s + gap;
         int groupW = iconsW + pctW;
-        int cursor = x + Math.Max(0, slot - groupW);
+        int cursor = x + Math.Max(0, (slot - groupW) / 2);
         int gy = y + (row - s) / 2;
         if (plug)
         {
