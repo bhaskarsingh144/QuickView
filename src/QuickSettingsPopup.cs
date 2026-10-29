@@ -19,17 +19,11 @@ internal sealed class QuickSettingsPopup : Form
     private readonly Font _fontValue;
     private readonly Font _fontTitle;
     private readonly System.Windows.Forms.Timer _poll;
-    private readonly System.Windows.Forms.Timer _fade;
     private float _dpi;
     private float _fit;
     private float _textFit;
     private QuickHit _hover = QuickHit.None;
     private DateTime _lastPoll = DateTime.MinValue;
-    private double _fadeFrom = OpacityFade.Normal;
-    private double _fadeTo = OpacityFade.Normal;
-    private DateTime _fadeStartedUtc = DateTime.MinValue;
-    private int _fadeDurationMs;
-    private bool _fadeRunning;
 
     public QuickSettingsPopup(AudioControl audio, float dpi, float fit, float textFit)
     {
@@ -42,22 +36,19 @@ internal sealed class QuickSettingsPopup : Form
         ShowInTaskbar = false;
         TopMost = true;
         BackColor = Fill;
-        // Near-opaque — translucent layers make thin text look soft/blurry.
+        // Fully opaque — layered Opacity below 1 softens ClearType on the drawer.
         Opacity = OpacityFade.Normal;
         DoubleBuffered = true;
         Text = "Quick settings";
         AutoScaleMode = AutoScaleMode.None;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
         float text = FontEm();
-        _fontLabel = new Font("Segoe UI", 10f * text, FontStyle.Regular, GraphicsUnit.Point);
-        _fontValue = new Font("Segoe UI", 10.5f * text, FontStyle.Regular, GraphicsUnit.Point);
-        _fontTitle = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
+        _fontLabel = ChromeFonts.CreateLabel(10.5f, text);
+        _fontValue = ChromeFonts.CreateUi(11f, text);
+        _fontTitle = ChromeFonts.CreateUi(11.5f, text);
         _poll = new System.Windows.Forms.Timer();
         _poll.Interval = 120;
         _poll.Tick += PollTick;
-        _fade = new System.Windows.Forms.Timer();
-        _fade.Interval = 16;
-        _fade.Tick += FadeTick;
         KeyPreview = true;
         ApplyLayoutSize();
     }
@@ -92,13 +83,12 @@ internal sealed class QuickSettingsPopup : Form
         PlaceBesidePanel(panelScreen);
         if (!Visible)
         {
-            // Instant show + short ease-in — open dwell lives on the panel hover, not here.
-            Opacity = OpacityFade.DrawerShowFrom;
+            // Binary show — no opacity ramp (intermediate Opacity blurs drawer text).
+            Opacity = OpacityFade.Normal;
             Show();
             _poll.Start();
-            StartShowFade();
         }
-        else if (!_fadeRunning)
+        else
             Opacity = OpacityFade.Normal;
         RaiseAbove();
         Invalidate();
@@ -142,51 +132,15 @@ internal sealed class QuickSettingsPopup : Form
     public void HidePopup()
     {
         _poll.Stop();
-        StopShowFade();
         Opacity = OpacityFade.Normal;
         _quick.Armed = QuickArm.None;
         if (Visible)
             Hide();
     }
 
-    private void StartShowFade()
-    {
-        _fadeFrom = Opacity;
-        _fadeTo = OpacityFade.Normal;
-        _fadeDurationMs = OpacityFade.DrawerShowMs;
-        _fadeStartedUtc = DateTime.UtcNow;
-        _fadeRunning = true;
-        if (!_fade.Enabled)
-            _fade.Start();
-    }
-
-    private void StopShowFade()
-    {
-        _fade.Stop();
-        _fadeRunning = false;
-    }
-
-    private void FadeTick(object sender, EventArgs e)
-    {
-        if (!_fadeRunning)
-        {
-            _fade.Stop();
-            return;
-        }
-        int elapsed = (int)(DateTime.UtcNow - _fadeStartedUtc).TotalMilliseconds;
-        Opacity = OpacityFade.OpacityAt(_fadeFrom, _fadeTo, elapsed, _fadeDurationMs);
-        if (OpacityFade.FadeComplete(elapsed, _fadeDurationMs))
-        {
-            Opacity = _fadeTo;
-            StopShowFade();
-        }
-    }
-
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _poll.Stop();
-        StopShowFade();
-        _fade.Dispose();
         _fontLabel.Dispose();
         _fontValue.Dispose();
         _fontTitle.Dispose();
@@ -294,7 +248,8 @@ internal sealed class QuickSettingsPopup : Form
         Graphics g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+        // Match panel/network path — ClearType looks soft on layered owner-draw chrome.
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         g.Clear(Fill);
         using (GraphicsPath path = Round(new Rectangle(0, 0, Width - 1, Height - 1), Px(14)))
         using (Pen pen = new Pen(Line, 1f))

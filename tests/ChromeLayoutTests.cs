@@ -40,7 +40,7 @@ internal static class ChromeLayoutTests
         ExpectTrue(shortCol.BadgeHeight + shortCol.FillHeight == ChromeLayout.Px(48, 120f, 0.74f), "volume short partitions height");
         ExpectTrue(shortCol.FillHeight >= 1, "volume short still has fill");
 
-        // Metric floors: tiny FontEm must not drop below MetricMinPt.
+        // Metric floors: tiny FontEm must not drop below MetricMinPt; sizes snap to 0.5pt.
         float tinyEm = ChromeLayout.FontEm(0.62f, 0.88f);
         ExpectTrue(tinyEm >= 0.55f, "FontEm floor");
         ExpectFloat(ChromeLayout.MetricMinPt,
@@ -49,8 +49,12 @@ internal static class ChromeLayoutTests
             "vol level pt floored at MetricMinPt");
         ExpectTrue(ChromeLayout.MetricPointSize(ChromeLayout.RateFontPt, tinyEm) >= ChromeLayout.MetricMinPt,
             "rate pt ≥ MetricMinPt");
+        ExpectFloat(11.5f, ChromeLayout.SnapPt(11.4f), 0.001f, "SnapPt 11.4 → 11.5");
+        ExpectFloat(11.5f, ChromeLayout.SnapPt(11.6f), 0.001f, "SnapPt 11.6 → 11.5");
+        ExpectFloat(12f, ChromeLayout.SnapPt(11.8f), 0.001f, "SnapPt 11.8 → 12");
+        ExpectFloat(ChromeLayout.MetricMinPt, ChromeLayout.SnapPt(3f), 0.001f, "SnapPt floors tiny");
 
-        // Desktop 4K: full em, vol level uses base×em (above floor).
+        // Desktop 4K: full em, vol level uses base×em (above floor), snapped.
         float deskEm = ChromeLayout.FontEm(1f, 1f);
         ExpectFloat(ChromeLayout.VolLevelFontPt,
             ChromeLayout.MetricPointSize(ChromeLayout.VolLevelFontPt, deskEm),
