@@ -48,6 +48,9 @@ internal static class ShellChrome
     private static IVirtualDesktopPinnedApps _pinnedApps;
     private static IVirtualDesktopManager _desktops;
     private static bool _comFailed;
+    private static bool _enumFills;
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
     private static int _lastPinTick;
     private static uint _pidCache;
     private static int _pidKind;
@@ -121,19 +124,24 @@ internal static class ShellChrome
         }
     }
 
+    /// <summary>
+    /// Hover-only appearance while any real app is open (same rule as QuickBrowse).
+    /// Rest without hover only on a true empty desktop.
+    /// </summary>
     internal static ShellView Decide(ShellEdge edge, bool pointerOnUs, bool pressedOnUs, bool pinned)
     {
         try
         {
-            bool fills = RealAppFillsPrimary();
             bool pull = pressedOnUs || pointerOnUs || PointerInEdge(edge);
+            bool fills = RealAppFillsPrimary() || EdgeCoveredByRealApp(edge);
+            bool workspace = fills || AnyWorkspaceWindow();
             if (pinned)
                 return fills ? ShellView.Reveal : ShellView.Rest;
-            if (!fills)
-                return ShellView.Rest;
             if (pull)
-                return ShellView.Reveal;
-            return ShellView.Park;
+                return fills ? ShellView.Reveal : ShellView.Rest;
+            if (workspace)
+                return ShellView.Park;
+            return ShellView.Rest;
         }
         catch
         {
@@ -204,7 +212,116 @@ internal static class ShellChrome
         return IsCompanion(Root(hwnd));
     }
 
+    private static bool EdgeCoveredByRealApp(ShellEdge edge)
+    {
+        Rectangle screen = Screen.PrimaryScreen.Bounds;
+        int strip = HoverStripPx;
+        POINT[] samples = new POINT[3];
+        if (edge == ShellEdge.Top)
+        {
+            int y = screen.Top + Math.Max(2, strip / 2);
+            samples[0] = Pt(screen.Left + screen.Width / 4, y);
+            samples[1] = Pt(screen.Left + screen.Width / 2, y);
+            samples[2] = Pt(screen.Left + (screen.Width * 3) / 4, y);
+        }
+        else if (edge == ShellEdge.Bottom)
+        {
+            int y = screen.Bottom - Math.Max(2, strip / 2);
+            samples[0] = Pt(screen.Left + screen.Width / 4, y);
+            samples[1] = Pt(screen.Left + screen.Width / 2, y);
+            samples[2] = Pt(screen.Left + (screen.Width * 3) / 4, y);
+        }
+        else
+        {
+            int x = screen.Right - Math.Max(2, strip / 2);
+            samples[0] = Pt(x, screen.Top + screen.Height / 4);
+            samples[1] = Pt(x, screen.Top + screen.Height / 2);
+            samples[2] = Pt(x, screen.Top + (screen.Height * 3) / 4);
+        }
+
+        int hits = 0;
+        for (int i = 0; i < samples.Length; i++)
+        {
+            IntPtr hwnd = WindowFromPoint(samples[i]);
+            if (hwnd == IntPtr.Zero)
+                continue;
+            IntPtr root = Root(hwnd);
+            if (IsCompanion(root) || !IsWindowVisible(root) || IsCloaked(root))
+                continue;
+            if (IsShellBackground(root) || IsMinimized(root) || IsDesktopUi(root))
+                continue;
+            hits++;
+        }
+        return hits >= 2;
+    }
+
+    private static POINT Pt(int x, int y)
+    {
+        POINT p;
+        p.X = x;
+        p.Y = y;
+        return p;
+    }
+
     private static bool RealAppFillsPrimary()
+    {
+        if (FillsWalkFromForeground())
+            return true;
+        _enumFills = false;
+        EnumWindows(EnumFillsCallback, IntPtr.Zero);
+        return _enumFills;
+    }
+
+    private static bool _enumWorkspace;
+
+    private static bool EnumFillsCallback(IntPtr hwnd, IntPtr lParam)
+    {
+        if (_enumFills)
+            return false;
+        if (!IsWindowVisible(hwnd) || IsCloaked(hwnd) || IsCompanion(hwnd))
+            return true;
+        if (IsShellBackground(hwnd) || IsMinimized(hwnd) || IsDesktopUi(hwnd))
+            return true;
+        if (FillsPrimaryScreen(hwnd))
+        {
+            _enumFills = true;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool AnyWorkspaceWindow()
+    {
+        _enumWorkspace = false;
+        EnumWindows(EnumWorkspaceCallback, IntPtr.Zero);
+        return _enumWorkspace;
+    }
+
+    private static bool EnumWorkspaceCallback(IntPtr hwnd, IntPtr lParam)
+    {
+        if (_enumWorkspace)
+            return false;
+        if (!IsWindowVisible(hwnd) || IsCloaked(hwnd) || IsCompanion(hwnd))
+            return true;
+        if (IsShellBackground(hwnd) || IsMinimized(hwnd) || IsDesktopUi(hwnd))
+            return true;
+        RECT rect;
+        if (!GetWindowRect(hwnd, out rect))
+            return true;
+        int w = rect.Right - rect.Left;
+        int h = rect.Bottom - rect.Top;
+        if (w < 160 || h < 160)
+            return true;
+        if (rect.Right < 8 || rect.Bottom < 8)
+            return true;
+        Rectangle screen = Screen.PrimaryScreen.Bounds;
+        if (rect.Left > screen.Right - 8 || rect.Top > screen.Bottom - 8)
+            return true;
+        _enumWorkspace = true;
+        return false;
+    }
+
+    private static bool FillsWalkFromForeground()
     {
         IntPtr hwnd = GetForegroundWindow();
         if (hwnd == IntPtr.Zero)
@@ -220,7 +337,7 @@ internal static class ShellChrome
                 continue;
             }
             IntPtr root = Root(hwnd);
-            if (IsShellBackground(root) || IsMinimized(root))
+            if (IsShellBackground(root) || IsMinimized(root) || IsDesktopUi(root))
             {
                 hwnd = GetWindow(hwnd, GW_HWNDNEXT);
                 continue;
@@ -272,7 +389,9 @@ internal static class ShellChrome
         try
         {
             string name = Process.GetProcessById((int)pid).ProcessName;
-            if (name == "JumpDock" || name == "WorkAppsDock" || name == "SidePanel" || name == "QuickView")
+            if (name == "JumpDock" || name == "WorkAppsDock" || name == "SidePanel" || name == "QuickView"
+                || name == "QuickBrowse"
+                || name == "TextInputHost" || name == "TabTip" || name == "osk")
                 _pidKind = 1;
         }
         catch
@@ -280,6 +399,16 @@ internal static class ShellChrome
             _pidKind = 0;
         }
         return _pidKind == 1;
+    }
+
+    private static bool IsDesktopUi(IntPtr hwnd)
+    {
+        string cls = ClassName(hwnd);
+        if (cls == "Progman" || cls == "WorkerW")
+            return true;
+        if (cls == "SHELLDLL_DefView" || cls == "SysListView32")
+            return IsShellBackground(Root(hwnd));
+        return false;
     }
 
     private static bool IsShellBackground(IntPtr hwnd)
@@ -327,6 +456,9 @@ internal static class ShellChrome
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
