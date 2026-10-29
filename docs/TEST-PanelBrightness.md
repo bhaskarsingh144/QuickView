@@ -30,7 +30,7 @@ Automated: `.\scripts\test.ps1` (SliderWheel, OpacityFade, ChromeLayout).
 | B1 Drag track | | Brightness follows |
 | B2 Hover + scroll | | ±1% per notch |
 | B3 While scrolling | | Panel soft-dims PanelNormal → Preview (~0.64); chrome stays readable |
-| B4 After ~650ms idle | | Panel eases back to **PanelNormal** (0.94), not drawer Normal |
+| B4 After ~650ms idle | | Panel eases back to **PanelNormal** (1.0, fully opaque) |
 
 ## C. Volume drag / wheel
 

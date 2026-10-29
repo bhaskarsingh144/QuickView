@@ -1,15 +1,16 @@
 using System;
 
 /// <summary>
-/// Opacity fade helpers for brightness preview: soft-dim the main panel while
-/// scrolling brightness so the desktop peeks through, then ease back after idle.
+/// Opacity helpers. Resting chrome stays fully opaque (ClearType / AA stay sharp).
+/// Only the brightness-wheel preview soft-dims the main panel, then eases back after idle.
+/// Drawer show/hide is binary (0 or 1) — no intermediate fade that blurs text.
 /// </summary>
 internal static class OpacityFade
 {
-    /// <summary>Quick-settings drawer resting opacity.</summary>
-    public const double Normal = 0.98;
-    /// <summary>Main panel resting opacity (PanelForm).</summary>
-    public const double PanelNormal = 0.94;
+    /// <summary>Quick-settings drawer resting opacity (fully opaque).</summary>
+    public const double Normal = 1.0;
+    /// <summary>Main panel resting opacity (fully opaque).</summary>
+    public const double PanelNormal = 1.0;
     /// <summary>
     /// Opacity floor while brightness-wheel preview is active on the main panel.
     /// Soft peek (~0.64) so chrome stays readable while desktop brightness is visible.
@@ -19,9 +20,9 @@ internal static class OpacityFade
     public const int FadeOutMs = 160;
     public const int FadeInMs = 280;
 
-    /// <summary>Quick-settings drawer: snap in fast, leave dwell can stay forgiving.</summary>
-    public const int DrawerShowMs = 90;
-    public const double DrawerShowFrom = 0.28;
+    /// <summary>Drawer opens at full opacity; kept for tests / callers that still reference timing.</summary>
+    public const int DrawerShowMs = 0;
+    public const double DrawerShowFrom = 1.0;
 
     public static double Clamp01(double v)
     {

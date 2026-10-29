@@ -277,15 +277,13 @@ internal sealed class PanelForm : Form
         Font oldLevel = _fontLevel;
         Font oldVolLevel = _fontVolLevel;
         Font oldBattery = _fontBattery;
-        _fontLabel = new Font("Segoe UI", 11f * text, FontStyle.Regular, GraphicsUnit.Point);
-        _fontValue = new Font("Segoe UI", 12f * text, FontStyle.Regular, GraphicsUnit.Point);
-        // Bahnschrift has that geometric thick/thin stroke contrast; falls back if missing.
-        // Modest metric face — large enough to read, small enough that the cluster stays stable.
-        _fontRate = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.RateFontPt, text));
-        _fontLevel = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.LevelFontPt, text));
-        // Narrow volume column — smaller digits, but never below the readable metric floor.
-        _fontVolLevel = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.VolLevelFontPt, text));
-        _fontBattery = CreateMetricFont(ChromeLayout.MetricPointSize(ChromeLayout.BatteryFontPt, text));
+        // Semibold UI + metric faces (same quality as network rates); ink colors unchanged.
+        _fontLabel = ChromeFonts.CreateLabel(11f, text);
+        _fontValue = ChromeFonts.CreateUi(12f, text);
+        _fontRate = ChromeFonts.CreateMetric(ChromeLayout.RateFontPt, text);
+        _fontLevel = ChromeFonts.CreateMetric(ChromeLayout.LevelFontPt, text);
+        _fontVolLevel = ChromeFonts.CreateMetric(ChromeLayout.VolLevelFontPt, text);
+        _fontBattery = ChromeFonts.CreateMetric(ChromeLayout.BatteryFontPt, text);
         _textH = (int)Math.Ceiling(_fontValue.GetHeight()) + 1;
         if (oldLabel != null)
             oldLabel.Dispose();
@@ -299,33 +297,6 @@ internal sealed class PanelForm : Form
             oldVolLevel.Dispose();
         if (oldBattery != null)
             oldBattery.Dispose();
-    }
-
-    /// <summary>
-    /// Prefer Bahnschrift (stroke-contrast geometric) then Segoe UI Semibold for metric text.
-    /// </summary>
-    private static Font CreateMetricFont(float emSize)
-    {
-        string[] names = new string[] { "Bahnschrift SemiBold", "Bahnschrift", "Segoe UI Semibold", "Segoe UI" };
-        for (int i = 0; i < names.Length; i++)
-        {
-            string name = names[i];
-            FontStyle style = (name == "Bahnschrift" || name == "Segoe UI") ? FontStyle.Bold : FontStyle.Regular;
-            try
-            {
-                Font font = new Font(name, emSize, style, GraphicsUnit.Point);
-                string family = font.FontFamily.Name;
-                bool ok = family.IndexOf("Bahnschrift", StringComparison.OrdinalIgnoreCase) >= 0
-                    || family.IndexOf("Segoe", StringComparison.OrdinalIgnoreCase) >= 0;
-                if (ok)
-                    return font;
-                font.Dispose();
-            }
-            catch
-            {
-            }
-        }
-        return new Font("Segoe UI", emSize, FontStyle.Bold, GraphicsUnit.Point);
     }
 
     private float Fit()

@@ -57,16 +57,14 @@ internal static class OpacityFadeTests
             Pass("preview between readable and panel normal");
         else
             Fail("preview between readable and panel normal");
-        if (OpacityFade.Normal > 0.9) { Pass("drawer normal near opaque"); } else { Fail("drawer normal near opaque"); }
-        if (OpacityFade.PanelNormal > 0.9 && OpacityFade.PanelNormal < OpacityFade.Normal)
-            Pass("panel normal slightly below drawer normal");
-        else
-            Fail("panel normal slightly below drawer normal");
+
+        ExpectDouble(1.0, OpacityFade.Normal, 0.0001, "drawer normal fully opaque");
+        ExpectDouble(1.0, OpacityFade.PanelNormal, 0.0001, "panel normal fully opaque");
         ExpectDouble(OpacityFade.PanelNormal, OpacityFade.OpacityAt(OpacityFade.Preview, OpacityFade.PanelNormal, OpacityFade.FadeInMs, OpacityFade.FadeInMs), 0.0001, "fade in ends at PanelNormal");
 
-        Expect(90, OpacityFade.DrawerShowMs, "drawer show ms pinned");
-        ExpectDouble(0.28, OpacityFade.DrawerShowFrom, 0.0001, "drawer show from pinned");
-        ExpectDouble(OpacityFade.Normal, OpacityFade.OpacityAt(OpacityFade.DrawerShowFrom, OpacityFade.Normal, OpacityFade.DrawerShowMs, OpacityFade.DrawerShowMs), 0.0001, "drawer show ends at Normal");
+        Expect(0, OpacityFade.DrawerShowMs, "drawer show is instant");
+        ExpectDouble(1.0, OpacityFade.DrawerShowFrom, 0.0001, "drawer show from opaque");
+        ExpectDouble(OpacityFade.Normal, OpacityFade.OpacityAt(OpacityFade.DrawerShowFrom, OpacityFade.Normal, 0, OpacityFade.DrawerShowMs), 0.0001, "drawer show ends at Normal");
 
         Console.WriteLine();
         Console.WriteLine("OpacityFade tests: {0} passed, {1} failed", _passed, _failed);
