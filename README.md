@@ -114,7 +114,7 @@ Runs unit tests (TextScale, SliderWheel, OpacityFade, DisplayScale, ChromeLayout
 
 **Metric chips** — resting shows CPU + Memory only; click CPU, Memory, GPU, or Disk for a detailed view; click again to return to the resting page.
 
-**Quick settings** — drawer control on the left edge of the panel (tile grid; hover opens instantly with a short fade-in). Esc or leave the drawer to close (brief leave grace).
+**Quick settings** — drawer control on the left edge of the panel (tile grid; hover opens instantly at full opacity). Esc or leave the drawer to close (brief leave grace).
 
 ---
 

@@ -56,12 +56,19 @@ internal static class ChromeLayout
         return (int)Math.Round(dip * dpi / 96f * fit);
     }
 
+    /// <summary>
+    /// Half-point grid + MetricMinPt floor — avoids blurry fractional sizes on high-DPI.
+    /// </summary>
+    public static float SnapPt(float pt)
+    {
+        if (pt < MetricMinPt)
+            pt = MetricMinPt;
+        return (float)(Math.Round(pt * 2.0) / 2.0);
+    }
+
     public static float MetricPointSize(float basePt, float fontEm)
     {
-        float pt = basePt * fontEm;
-        if (pt < MetricMinPt)
-            return MetricMinPt;
-        return pt;
+        return SnapPt(basePt * fontEm);
     }
 
     public struct VolumeColumnGeom

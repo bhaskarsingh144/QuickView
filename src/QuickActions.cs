@@ -169,7 +169,7 @@ internal sealed class QuickActions
 
     public static void GlyphTextAa(Graphics g, Rectangle r, Color ink)
     {
-        using (Font f = new Font("Segoe UI", Math.Max(7f, r.Height * 0.45f), FontStyle.Regular, GraphicsUnit.Pixel))
+        using (Font f = ChromeFonts.CreatePixel(Math.Max(7f, r.Height * 0.45f)))
         using (SolidBrush brush = new SolidBrush(ink))
         using (StringFormat fmt = new StringFormat())
         {
