@@ -2,7 +2,7 @@
 
 **Edge-docked system monitor for the right edge of your Windows desktop.**
 
-Live CPU and memory on the resting panel — GPU and disk behind metric chips — with brightness and volume on the main chrome, plus a quick settings drawer for text scale and everyday system actions. No installer required. No telemetry. Runs locally.
+Live CPU and memory on the resting panel — GPU and disk behind metric chips — with brightness and volume on the main chrome, plus a quick settings drawer for everyday system actions. No installer required. No telemetry. Runs locally.
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.5%2B-512BD4?style=flat-square)
@@ -53,8 +53,7 @@ Open from the left-edge drawer control (hover or click):
 
 | Section | What you get |
 | --- | --- |
-| **Text** | Windows **Accessibility → Text size** (“Make text bigger”) — A− / A+ (5% steps), then **Apply** (same as Settings Apply / “Please wait”) |
-| **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute, Relaunch (restarts QuickView) |
+| **Actions** | Grid: Explorer, Lock, Sleep, Restart, Shut down, Display, Sound, Mute, Relaunch (restarts QuickView), Text (opens **Accessibility → Text size**) |
 
 Restart and Shut down require a second confirm within two seconds.
 
@@ -99,7 +98,7 @@ Output: `bin\QuickView.exe`
 .\scripts\test.ps1
 ```
 
-Runs unit tests (TextScale, SliderWheel, OpacityFade, DisplayScale, ChromeLayout). Manual matrices: [docs/TEST-TextScale.md](docs/TEST-TextScale.md), [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md), [docs/TEST-DisplayScale.md](docs/TEST-DisplayScale.md).
+Runs unit tests (SliderWheel, OpacityFade, DisplayScale, ChromeLayout). Manual matrices: [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md), [docs/TEST-DisplayScale.md](docs/TEST-DisplayScale.md).
 
 ---
 
@@ -160,7 +159,7 @@ C:\Program Files\QuickView\uninstall.bat
 ```text
 QuickView/
 ├── src/              # C# sources (WinForms)
-├── tests/            # Unit tests (TextScale, etc.)
+├── tests/            # Unit tests (SliderWheel, DisplayScale, etc.)
 ├── scripts/          # build.ps1, test.ps1, setup*.bat
 ├── docs/             # Manual test matrices
 ├── assets/           # Screenshots for this README
