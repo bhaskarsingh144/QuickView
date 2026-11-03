@@ -33,6 +33,25 @@ internal sealed class BrightnessControl : IDisposable
         Refresh();
     }
 
+    /// <summary>
+    /// Controllable displays in enumeration order, capped at <paramref name="max"/>.
+    /// Usable count gates single vs dual chrome — not how many screens are plugged in.
+    /// </summary>
+    public void CopyUsable(BrightnessMonitor[] dest, int max, out int count)
+    {
+        count = 0;
+        if (dest == null || max < 1)
+            return;
+        if (max > dest.Length)
+            max = dest.Length;
+        for (int i = 0; i < _items.Count && count < max; i++)
+        {
+            if (!_items[i].Controllable)
+                continue;
+            dest[count++] = _items[i];
+        }
+    }
+
     public void Refresh()
     {
         DisposeOwned();

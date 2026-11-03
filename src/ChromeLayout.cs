@@ -24,6 +24,40 @@ internal static class ChromeLayout
     public const int MainMinWidthDip = 120;
     public const int BrightBlockDip = 34;
     public const int BrightGapBelowDip = 10;
+    /// <summary>Gap between the two thin brightness rows when two usable displays are present.</summary>
+    public const int BrightDualGapDip = 4;
+
+    public struct DualBrightRows
+    {
+        public int RowA;
+        public int RowB;
+        public int Gap;
+    }
+
+    /// <summary>
+    /// Split a fixed total height into two rows + gap that sum exactly to totalPx.
+    /// Used only for the dual-usable brightness branch; single strip keeps BrightBlockDip alone.
+    /// </summary>
+    public static DualBrightRows DualBrightRowHeights(int totalPx, int gapPx)
+    {
+        DualBrightRows r = new DualBrightRows();
+        if (totalPx < 1)
+        {
+            r.RowA = 0;
+            r.RowB = 0;
+            r.Gap = 0;
+            return r;
+        }
+        if (gapPx < 0)
+            gapPx = 0;
+        if (gapPx >= totalPx)
+            gapPx = Math.Max(0, totalPx / 5);
+        int remain = totalPx - gapPx;
+        r.RowA = remain / 2;
+        r.RowB = remain - r.RowA;
+        r.Gap = gapPx;
+        return r;
+    }
     /// <summary>Minimum width reserved for the drawer hit left of the network cluster.</summary>
     public const int ChevronReserveMinDip = 44;
     public const int HeaderGapDip = 6;

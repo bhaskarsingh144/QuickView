@@ -61,6 +61,20 @@ internal static class ChromeLayoutTests
             0.001f,
             "vol level pt on desktop");
 
+        // Dual brightness: two rows + gap sum to BrightBlockDip (single path still uses full block).
+        int total = ChromeLayout.Px(ChromeLayout.BrightBlockDip, 96f, 1f);
+        int gap = ChromeLayout.Px(ChromeLayout.BrightDualGapDip, 96f, 1f);
+        ChromeLayout.DualBrightRows dual = ChromeLayout.DualBrightRowHeights(total, gap);
+        ExpectTrue(dual.RowA + dual.Gap + dual.RowB == total, "dual rows + gap == BrightBlockDip px");
+        ExpectTrue(dual.RowA > 0 && dual.RowB > 0, "dual rows both positive");
+        ExpectTrue(dual.Gap == gap, "dual gap preserved");
+        ChromeLayout.DualBrightRows dualTight = ChromeLayout.DualBrightRowHeights(
+            ChromeLayout.Px(ChromeLayout.BrightBlockDip, 120f, 0.74f),
+            ChromeLayout.Px(ChromeLayout.BrightDualGapDip, 120f, 0.74f));
+        ExpectTrue(dualTight.RowA + dualTight.Gap + dualTight.RowB
+            == ChromeLayout.Px(ChromeLayout.BrightBlockDip, 120f, 0.74f),
+            "dual rows sum @125% Fit");
+
         Console.WriteLine();
         Console.WriteLine("ChromeLayout tests: {0} passed, {1} failed", _passed, _failed);
         return _failed == 0 ? 0 : 1;
