@@ -44,7 +44,7 @@ Live CPU and memory on the resting panel — GPU and disk behind metric chips �
 - Wide **drawer** hit zone (control fills the hover rect → Quick settings); **network** (stable-width Wi-Fi + rates) sits next to **battery**
 - Compact **battery** percent in a fixed slot (semibold metric face) with charging indicator
 - Click network → Windows network settings · Click battery → power options
-- **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling
+- **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling. Up to **two usable** displays get thinner named strips in the same chrome height; one usable keeps the single unnamed strip
 - **Volume** column — speaker above a shortened fill, level digits inside; drag or scroll ±1% (no dim)
 
 ### Quick settings drawer
