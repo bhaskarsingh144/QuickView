@@ -18,7 +18,7 @@ Automated: `.\scripts\test.ps1` (DisplayScale + ChromeLayout suites).
 | A2 Header rates | | Stable-width rates; drawer hit does not twitch; fits beside battery |
 | A3 Brightness / volume labels | | Volume speaker above fill, digits inside; readable at 100–150% |
 | A4 Quick settings Actions | | Icon and label do not overlap (“Shut down”, “Explorer”) |
-| A5 Text size row | | A− / A+ / Apply not cramped |
+| A5 Text tile | | Opens Accessibility → Text size; label fits |
 | A6 Windows scale 125% / 150% | | Still usable; text tighter than before |
 
 ## B. Reference screen that already looked good

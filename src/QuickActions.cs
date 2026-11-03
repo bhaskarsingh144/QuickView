@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 
@@ -7,10 +6,6 @@ internal enum QuickHit
 {
     None,
     QuickIcon,
-    TextMinus,
-    TextPlus,
-    TextScale,
-    TextApply,
     TileExplorer,
     TileLock,
     TileSleep,
@@ -18,6 +13,7 @@ internal enum QuickHit
     TileShutdown,
     TileDisplaySettings,
     TileSoundSettings,
+    TileTextSettings,
     TileMute,
     TileAppRestart
 }
@@ -32,11 +28,6 @@ internal enum QuickArm
 internal sealed class QuickActions
 {
     public Rectangle IconRect;
-    public Rectangle TextMinusRect;
-    public Rectangle TextPlusRect;
-    public Rectangle TextTrack;
-    public Rectangle TextThumb;
-    public Rectangle TextApplyRect;
     public Rectangle TileExplorer;
     public Rectangle TileLock;
     public Rectangle TileSleep;
@@ -44,13 +35,11 @@ internal sealed class QuickActions
     public Rectangle TileShutdown;
     public Rectangle TileDisplaySettings;
     public Rectangle TileSoundSettings;
+    public Rectangle TileTextSettings;
     public Rectangle TileMute;
     public Rectangle TileAppRestart;
 
     public bool Muted;
-    public int TextPercent = 100;
-    public int TextAppliedPercent = 100;
-    public bool TextDirty;
     public string StatusLine = "";
     public QuickArm Armed = QuickArm.None;
     public DateTime ArmedUntil = DateTime.MinValue;
@@ -58,11 +47,6 @@ internal sealed class QuickActions
     public void ClearHits()
     {
         IconRect = Rectangle.Empty;
-        TextMinusRect = Rectangle.Empty;
-        TextPlusRect = Rectangle.Empty;
-        TextTrack = Rectangle.Empty;
-        TextThumb = Rectangle.Empty;
-        TextApplyRect = Rectangle.Empty;
         TileExplorer = Rectangle.Empty;
         TileLock = Rectangle.Empty;
         TileSleep = Rectangle.Empty;
@@ -70,6 +54,7 @@ internal sealed class QuickActions
         TileShutdown = Rectangle.Empty;
         TileDisplaySettings = Rectangle.Empty;
         TileSoundSettings = Rectangle.Empty;
+        TileTextSettings = Rectangle.Empty;
         TileMute = Rectangle.Empty;
         TileAppRestart = Rectangle.Empty;
     }
@@ -90,10 +75,6 @@ internal sealed class QuickActions
     {
         ClearArmIfExpired();
         if (IconRect.Contains(p)) return QuickHit.QuickIcon;
-        if (TextMinusRect.Contains(p)) return QuickHit.TextMinus;
-        if (TextPlusRect.Contains(p)) return QuickHit.TextPlus;
-        if (TextTrack.Contains(p) || TextThumb.Contains(p)) return QuickHit.TextScale;
-        if (TextDirty && TextApplyRect.Contains(p)) return QuickHit.TextApply;
         if (TileExplorer.Contains(p)) return QuickHit.TileExplorer;
         if (TileLock.Contains(p)) return QuickHit.TileLock;
         if (TileSleep.Contains(p)) return QuickHit.TileSleep;
@@ -101,6 +82,7 @@ internal sealed class QuickActions
         if (TileShutdown.Contains(p)) return QuickHit.TileShutdown;
         if (TileDisplaySettings.Contains(p)) return QuickHit.TileDisplaySettings;
         if (TileSoundSettings.Contains(p)) return QuickHit.TileSoundSettings;
+        if (TileTextSettings.Contains(p)) return QuickHit.TileTextSettings;
         if (TileMute.Contains(p)) return QuickHit.TileMute;
         if (TileAppRestart.Contains(p)) return QuickHit.TileAppRestart;
         return QuickHit.None;

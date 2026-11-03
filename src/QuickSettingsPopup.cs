@@ -11,7 +11,6 @@ internal sealed class QuickSettingsPopup : Form
     private static readonly Color Track = UiTheme.Raised;
     private static readonly Color TextMain = UiTheme.Text;
     private static readonly Color TextMuted = UiTheme.Muted;
-    private static readonly Color Accent = UiTheme.Accent;
 
     private readonly AudioControl _audio;
     private readonly QuickActions _quick = new QuickActions();
@@ -24,6 +23,9 @@ internal sealed class QuickSettingsPopup : Form
     private float _textFit;
     private QuickHit _hover = QuickHit.None;
     private DateTime _lastPoll = DateTime.MinValue;
+
+    private const int TileCount = 10;
+    private const int TileCols = 3;
 
     public QuickSettingsPopup(AudioControl audio, float dpi, float fit, float textFit)
     {
@@ -179,13 +181,6 @@ internal sealed class QuickSettingsPopup : Form
         }
         else if (force)
             _quick.StatusLine = _audio.Status;
-        int applied = SystemActions.GetTextScalePercent();
-        _quick.TextAppliedPercent = applied;
-        if (!_quick.TextDirty || force)
-        {
-            _quick.TextPercent = applied;
-            _quick.TextDirty = false;
-        }
         _quick.ClearArmIfExpired();
     }
 
@@ -202,18 +197,22 @@ internal sealed class QuickSettingsPopup : Form
         return (int)Math.Round(dip * _dpi / 96f * _fit);
     }
 
+    private static int TileRows()
+    {
+        return (TileCount + TileCols - 1) / TileCols;
+    }
+
     private void ApplyLayoutSize()
     {
         int pad = Px(16);
         int w = Px(320);
         int y = pad;
-        // Text size: label + A± row + Apply
-        y += Px(22) + Px(8) + Px(32) + Px(8) + Px(32) + BlockGap();
         y += SectionHeadH() + Px(8);
         int gap = Px(8);
         int innerW = w - pad * 2;
-        int cell = Math.Min(Px(92), (innerW - gap * 2) / 3);
-        y += 3 * cell + 2 * gap + pad;
+        int cell = Math.Min(Px(92), (innerW - gap * 2) / TileCols);
+        int rows = TileRows();
+        y += rows * cell + (rows - 1) * gap + pad;
         if (!string.IsNullOrEmpty(_quick.StatusLine))
             y += Px(18);
         Size = new Size(w, y);
@@ -223,11 +222,6 @@ internal sealed class QuickSettingsPopup : Form
     private int SectionHeadH()
     {
         return Px(14) + Px(8);
-    }
-
-    private int BlockGap()
-    {
-        return Px(16);
     }
 
     private void ApplyRegion()
@@ -266,39 +260,10 @@ internal sealed class QuickSettingsPopup : Form
         int inner = Width - pad * 2;
         int y = pad;
         int gap = Px(8);
-        int side = Px(32);
-
-        // Text size: A− · A+ · Apply (Settings > Accessibility > Text size)
-        string textValue = _quick.TextPercent + "%" + (_quick.TextDirty ? " *" : "");
-        y = DrawLabelRow(g, x, y, inner, "Text size", textValue);
-        int half = (inner - gap) / 2;
-        _quick.TextMinusRect = new Rectangle(x, y, half, side);
-        _quick.TextPlusRect = new Rectangle(x + half + gap, y, inner - half - gap, side);
-        FillRound(g, _quick.TextMinusRect, Px(8), _hover == QuickHit.TextMinus ? UiTheme.Hover : Track);
-        FillRound(g, _quick.TextPlusRect, Px(8), _hover == QuickHit.TextPlus ? UiTheme.Hover : Track);
-        using (SolidBrush brush = new SolidBrush(TextMain))
-        using (StringFormat fmt = CenterFormat())
-        {
-            g.DrawString("A−", _fontLabel, brush, _quick.TextMinusRect, fmt);
-            g.DrawString("A+", _fontLabel, brush, _quick.TextPlusRect, fmt);
-        }
-        y += side + gap;
-        int applyH = side;
-        _quick.TextApplyRect = new Rectangle(x, y, inner, applyH);
-        bool applyHot = _hover == QuickHit.TextApply && _quick.TextDirty;
-        Color applyBack = !_quick.TextDirty
-            ? Color.FromArgb(255, 40, 44, 50)
-            : (applyHot ? Accent : Color.FromArgb(255, 70, 110, 180));
-        Color applyInk = _quick.TextDirty ? TextMain : TextMuted;
-        FillRound(g, _quick.TextApplyRect, Px(8), applyBack);
-        using (SolidBrush brush = new SolidBrush(applyInk))
-        using (StringFormat fmt = CenterFormat())
-            g.DrawString("Apply", _fontLabel, brush, _quick.TextApplyRect, fmt);
-        y += applyH + BlockGap();
 
         y = DrawSectionHead(g, "Actions", x, y, inner);
-        int cell = Math.Min(Px(92), (inner - gap * 2) / 3);
-        int gridW = 3 * cell + 2 * gap;
+        int cell = Math.Min(Px(92), (inner - gap * 2) / TileCols);
+        int gridW = TileCols * cell + (TileCols - 1) * gap;
         int gridX = x + (inner - gridW) / 2;
         string[] labels = new string[]
         {
@@ -308,24 +273,27 @@ internal sealed class QuickSettingsPopup : Form
             "Display",
             "Sound",
             _quick.Muted ? "Unmute" : "Mute",
-            "Relaunch"
+            "Relaunch",
+            "Text"
         };
         QuickHit[] hits = new QuickHit[]
         {
             QuickHit.TileExplorer, QuickHit.TileLock, QuickHit.TileSleep,
             QuickHit.TileRestart, QuickHit.TileShutdown, QuickHit.TileDisplaySettings,
-            QuickHit.TileSoundSettings, QuickHit.TileMute, QuickHit.TileAppRestart
+            QuickHit.TileSoundSettings, QuickHit.TileMute, QuickHit.TileAppRestart,
+            QuickHit.TileTextSettings
         };
         Action<Graphics, Rectangle, Color>[] glyphs = new Action<Graphics, Rectangle, Color>[]
         {
             QuickActions.GlyphExplorer, QuickActions.GlyphLock, QuickActions.GlyphSleep,
             QuickActions.GlyphRestart, QuickActions.GlyphShutdown, QuickActions.GlyphSettings,
-            QuickActions.GlyphSpeakerOpen, QuickActions.GlyphSpeakerOpen, QuickActions.GlyphAppRestart
+            QuickActions.GlyphSpeakerOpen, QuickActions.GlyphSpeakerOpen, QuickActions.GlyphAppRestart,
+            QuickActions.GlyphTextAa
         };
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < TileCount; i++)
         {
-            int col = i % 3;
-            int row = i / 3;
+            int col = i % TileCols;
+            int row = i / TileCols;
             Rectangle cellRect = new Rectangle(gridX + col * (cell + gap), y + row * (cell + gap), cell, cell);
             AssignTile(hits[i], cellRect);
             bool hover = _hover == hits[i];
@@ -336,7 +304,7 @@ internal sealed class QuickSettingsPopup : Form
             else
                 QuickActions.DrawGridTile(g, cellRect, labels[i], _fontValue, hover, armed, Track, Line, TextMain, TextMuted, glyphs[i]);
         }
-        y += 3 * (cell + gap);
+        y += TileRows() * (cell + gap);
         if (!string.IsNullOrEmpty(_quick.StatusLine))
         {
             using (SolidBrush brush = new SolidBrush(TextMuted))
@@ -348,27 +316,6 @@ internal sealed class QuickSettingsPopup : Form
     {
         QuickActions.DrawSectionTitle(g, _fontTitle, title, x, y, inner, TextMuted);
         return y + SectionHeadH();
-    }
-
-    private int DrawLabelRow(Graphics g, int x, int y, int inner, string title, string value)
-    {
-        int h = Px(22);
-        int valueW = Px(64);
-        using (SolidBrush brush = new SolidBrush(TextMain))
-        using (StringFormat near = new StringFormat())
-        using (StringFormat far = new StringFormat())
-        {
-            near.Alignment = StringAlignment.Near;
-            near.LineAlignment = StringAlignment.Center;
-            near.Trimming = StringTrimming.EllipsisCharacter;
-            near.FormatFlags = StringFormatFlags.NoWrap;
-            far.Alignment = StringAlignment.Far;
-            far.LineAlignment = StringAlignment.Center;
-            far.FormatFlags = StringFormatFlags.NoWrap;
-            g.DrawString(title, _fontValue, brush, new Rectangle(x, y, Math.Max(0, inner - valueW - Px(8)), h), near);
-            g.DrawString(value, _fontValue, brush, new Rectangle(x + inner - valueW, y, valueW, h), far);
-        }
-        return y + h + Px(8);
     }
 
     private void DrawMuteGridTile(Graphics g, Rectangle rect, string label, bool hover)
@@ -389,25 +336,9 @@ internal sealed class QuickSettingsPopup : Form
         else if (hit == QuickHit.TileShutdown) _quick.TileShutdown = r;
         else if (hit == QuickHit.TileDisplaySettings) _quick.TileDisplaySettings = r;
         else if (hit == QuickHit.TileSoundSettings) _quick.TileSoundSettings = r;
+        else if (hit == QuickHit.TileTextSettings) _quick.TileTextSettings = r;
         else if (hit == QuickHit.TileMute) _quick.TileMute = r;
         else if (hit == QuickHit.TileAppRestart) _quick.TileAppRestart = r;
-    }
-
-    private static StringFormat CenterFormat()
-    {
-        StringFormat fmt = new StringFormat();
-        fmt.Alignment = StringAlignment.Center;
-        fmt.LineAlignment = StringAlignment.Center;
-        fmt.Trimming = StringTrimming.EllipsisCharacter;
-        fmt.FormatFlags = StringFormatFlags.NoWrap;
-        return fmt;
-    }
-
-    private static void FillRound(Graphics g, Rectangle rect, int radius, Color color)
-    {
-        using (GraphicsPath path = Round(rect, radius))
-        using (SolidBrush brush = new SolidBrush(color))
-            g.FillPath(brush, path);
     }
 
     private static GraphicsPath Round(Rectangle r, int radius)
@@ -452,50 +383,10 @@ internal sealed class QuickSettingsPopup : Form
         }
     }
 
-    private void SetTextPending(int percent)
-    {
-        percent = TextScale.ClampAndSnap(percent);
-        _quick.TextPercent = percent;
-        _quick.TextDirty = percent != _quick.TextAppliedPercent;
-        _quick.StatusLine = "";
-        Invalidate();
-    }
-
-    private void CommitTextScale()
-    {
-        if (!_quick.TextDirty)
-            return;
-        if (SystemActions.SetTextScalePercent(_quick.TextPercent))
-        {
-            _quick.TextPercent = SystemActions.GetTextScalePercent();
-            _quick.TextAppliedPercent = _quick.TextPercent;
-            _quick.TextDirty = false;
-            _quick.StatusLine = "";
-        }
-        else
-            _quick.StatusLine = SystemActions.LastError;
-        Invalidate();
-    }
-
     private void HandleClick(Point p)
     {
         QuickHit hit = _quick.HitTest(p);
         _quick.ClearArmIfExpired();
-        if (hit == QuickHit.TextMinus)
-        {
-            SetTextPending(TextScale.StepDown(_quick.TextPercent));
-            return;
-        }
-        if (hit == QuickHit.TextPlus)
-        {
-            SetTextPending(TextScale.StepUp(_quick.TextPercent, false));
-            return;
-        }
-        if (hit == QuickHit.TextApply)
-        {
-            CommitTextScale();
-            return;
-        }
         if (hit == QuickHit.TileMute)
         {
             bool next = !_quick.Muted;
@@ -561,6 +452,12 @@ internal sealed class QuickSettingsPopup : Form
         if (hit == QuickHit.TileSoundSettings)
         {
             SystemActions.OpenSettings("ms-settings:sound");
+            return;
+        }
+        if (hit == QuickHit.TileTextSettings)
+        {
+            // Accessibility → Text size (“Make text bigger”)
+            SystemActions.OpenSettings("ms-settings:easeofaccess-display");
             return;
         }
         if (hit == QuickHit.TileAppRestart)

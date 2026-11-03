@@ -46,11 +46,6 @@ function Run-Suite([string]$name, [string[]]$sources, [string]$exeName, [string[
     Write-Host "$name passed." -ForegroundColor Green
 }
 
-Run-Suite "TextScaleTests" @(
-    (Join-Path $srcDir "TextScale.cs"),
-    (Join-Path $testsDir "TextScaleTests.cs")
-) "TextScaleTests.exe"
-
 Run-Suite "SliderWheelTests" @(
     (Join-Path $srcDir "SliderWheel.cs"),
     (Join-Path $testsDir "SliderWheelTests.cs")

@@ -80,14 +80,13 @@ Automated (no NuGet):
 .\scripts\test.ps1
 ```
 
-This compiles and runs unit tests under `tests/` (TextScale, SliderWheel, OpacityFade, DisplayScale, ChromeLayout). Manual matrices live in `docs/TEST-*.md`.
+This compiles and runs unit tests under `tests/` (SliderWheel, OpacityFade, DisplayScale, ChromeLayout). Manual matrices live in `docs/TEST-*.md`.
 
 Before submitting a pull request:
 1. Build successfully (`.\scripts\build.ps1`)
 2. Pass `.\scripts\test.ps1`
 3. Run the app and verify basic functionality
-4. For Text size changes, walk through [docs/TEST-TextScale.md](docs/TEST-TextScale.md)
-5. Spot-check metrics and the quick settings drawer on your DPI setup
+4. Spot-check metrics and the quick settings drawer on your DPI setup
 
 ### Submitting Changes
 
@@ -114,7 +113,6 @@ Use clear, descriptive commit messages:
 
 - Temperature readings depend on Windows WMI - not all hardware exposes this data
 - Brightness control requires DDC/CI compatible monitors or WMI support
-- Text scale changes require system notification propagation
 - Virtual desktop pinning works on Windows 10/11 only
 
 ## Reporting Issues
