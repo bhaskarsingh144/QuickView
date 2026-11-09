@@ -90,9 +90,12 @@ internal sealed class PanelForm : Form
     private bool _batteryHot;
     private Rectangle _brightTrack;
     private string _brightId = "";
-    /// <summary>Second strip only when two usable displays; empty otherwise.</summary>
+    /// <summary>Second strip when two identified displays; empty otherwise.</summary>
     private Rectangle _brightTrack2;
     private string _brightId2 = "";
+    /// <summary>True when the matching strip accepts drag/wheel (software brightness).</summary>
+    private bool _brightTrackLive;
+    private bool _brightTrack2Live;
     private Rectangle _brightDragRect;
     private string _brightDragId = "";
     private bool _brightDragging;
@@ -666,7 +669,8 @@ internal sealed class PanelForm : Form
         y = Header(g, x, y, mainW);
         int afterHeader = y;
         y = BrightnessStrip(g, x, y, mainW);
-        int volBottom = FirstControllableBrightness() != null
+        // Match volume column to brightness chrome whenever any strip is drawn (live or frosted).
+        int volBottom = y > afterHeader
             ? y - Px(10)
             : afterHeader - Px(14);
         if (volBottom < y0 + Px(ChromeLayout.VolMinHeightDip))
@@ -734,40 +738,44 @@ internal sealed class PanelForm : Form
     {
         _brightTrack = Rectangle.Empty;
         _brightTrack2 = Rectangle.Empty;
+        _brightId = "";
         _brightId2 = "";
-        BrightnessMonitor[] usable = new BrightnessMonitor[2];
-        int usableCount;
-        _brightness.CopyUsable(usable, 2, out usableCount);
-        if (usableCount == 2)
-            return BrightnessStripDual(g, x, y, inner, usable[0], usable[1]);
-
-        // Single (or zero) usable: keep the original full-height strip path untouched.
-        BrightnessMonitor mon = FirstControllableBrightness();
-        if (mon == null)
-        {
-            _brightId = "";
+        _brightTrackLive = false;
+        _brightTrack2Live = false;
+        BrightnessMonitor[] present = new BrightnessMonitor[2];
+        int presentCount;
+        _brightness.CopyPresent(present, 2, out presentCount);
+        BrightnessMonitor a;
+        BrightnessMonitor b;
+        BrightnessChrome.LayoutKind layout = BrightnessChrome.Resolve(present, presentCount, out a, out b);
+        if (layout == BrightnessChrome.LayoutKind.Dual)
+            return BrightnessStripDual(g, x, y, inner, a, b);
+        if (layout != BrightnessChrome.LayoutKind.Single || a == null)
             return y;
-        }
-        _brightId = mon.Id ?? "";
+
+        // Single controllable: keep the original full-height strip path untouched.
+        _brightId = a.Id ?? "";
+        _brightTrackLive = true;
         int blockH = Px(ChromeLayout.BrightBlockDip);
         int gapBelow = Px(ChromeLayout.BrightGapBelowDip);
         _brightTrack = new Rectangle(x, y, inner, blockH);
         if (g != null)
         {
-            float v = mon.Percent / 100f;
+            float v = a.Percent / 100f;
             if (v < 0f) v = 0f;
             if (v > 1f) v = 1f;
             Color back = _brightHover || _brightDragging
                 ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
                 : Track;
             QuickActions.DrawFillBlock(g, _brightTrack, v, back, UiTheme.Accent);
-            DrawBrightnessBadge(g, _brightTrack, mon.Percent.ToString(), _fontLevel);
+            DrawBrightnessBadge(g, _brightTrack, a.Percent.ToString(), _fontLevel);
         }
         return y + blockH + gapBelow;
     }
 
     /// <summary>
-    /// Two usable displays only: split BrightBlockDip into two thin named fills (same total height).
+    /// Two identified displays: split BrightBlockDip into thin named rows (same total height).
+    /// Non-controllable rows stay visible but frosted — brand + resolution, no interaction.
     /// </summary>
     private int BrightnessStripDual(Graphics g, int x, int y, int inner, BrightnessMonitor a, BrightnessMonitor b)
     {
@@ -775,8 +783,10 @@ internal sealed class PanelForm : Form
         int gapBelow = Px(ChromeLayout.BrightGapBelowDip);
         ChromeLayout.DualBrightRows rows = ChromeLayout.DualBrightRowHeights(
             blockH, Px(ChromeLayout.BrightDualGapDip));
-        _brightId = a.Id ?? "";
-        _brightId2 = b.Id ?? "";
+        _brightId = a != null ? (a.Id ?? "") : "";
+        _brightId2 = b != null ? (b.Id ?? "") : "";
+        _brightTrackLive = a != null && a.Controllable;
+        _brightTrack2Live = b != null && b.Controllable;
         _brightTrack = new Rectangle(x, y, inner, rows.RowA);
         _brightTrack2 = new Rectangle(x, y + rows.RowA + rows.Gap, inner, rows.RowB);
         if (g != null)
@@ -789,6 +799,9 @@ internal sealed class PanelForm : Form
 
     private bool DualRowHot(int slot)
     {
+        bool live = slot == 0 ? _brightTrackLive : _brightTrack2Live;
+        if (!live)
+            return false;
         if (_brightDragging)
             return string.Equals(_brightDragId, slot == 0 ? _brightId : _brightId2, StringComparison.Ordinal);
         return slot == 0 ? _brightHover : _brightHover2;
@@ -798,15 +811,24 @@ internal sealed class PanelForm : Form
     {
         if (track.Width < 1 || track.Height < 1 || mon == null)
             return;
+        Font font = _fontVolLevel ?? _fontLevel;
+        if (!mon.Controllable)
+        {
+            Color back = Color.FromArgb(255, 0x26, 0x29, 0x2E);
+            Color sheen = Color.FromArgb(255, 0x5A, 0x60, 0x6A);
+            QuickActions.DrawFillBlockDisabled(g, track, back, sheen);
+            DrawDualBrightnessBadge(g, track, mon.Name, BrightnessChrome.DualRightLabel(mon), font, TextMuted);
+            return;
+        }
         float v = mon.Percent / 100f;
         if (v < 0f) v = 0f;
         if (v > 1f) v = 1f;
-        Color back = hot
+        Color liveBack = hot
             ? Color.FromArgb(255, 0x38, 0x3D, 0x46)
             : Track;
-        QuickActions.DrawFillBlock(g, track, v, back, UiTheme.Accent);
-        // Thin dual rows: use the compact volume-level face so name/% stay inside the fill.
-        DrawDualBrightnessBadge(g, track, mon.Name, mon.Percent.ToString(), _fontVolLevel ?? _fontLevel);
+        QuickActions.DrawFillBlock(g, track, v, liveBack, UiTheme.Accent);
+        // Thin dual rows: compact face so name/% stay inside the fill.
+        DrawDualBrightnessBadge(g, track, mon.Name, BrightnessChrome.DualRightLabel(mon), font, TextMain);
     }
 
     /// <summary>Sun + level digits centered horizontally in the brightness fill block.</summary>
@@ -839,22 +861,22 @@ internal sealed class PanelForm : Form
         }
     }
 
-    /// <summary>Dual rows only: truncated name near-left, percent far-right (no sun).</summary>
-    private void DrawDualBrightnessBadge(Graphics g, Rectangle bounds, string name, string percent, Font font)
+    /// <summary>Dual rows only: truncated name near-left, percent or resolution far-right (no sun).</summary>
+    private void DrawDualBrightnessBadge(Graphics g, Rectangle bounds, string name, string right, Font font, Color ink)
     {
         if (font == null || bounds.Width < 1 || bounds.Height < 1)
             return;
         int pad = Math.Max(2, Px(6));
         int gap = Px(4);
-        string pct = percent ?? "";
-        SizeF pctSize = g.MeasureString(pct, font);
-        int pctW = (int)Math.Ceiling(pctSize.Width);
-        int pctH = (int)Math.Ceiling(font.GetHeight());
-        int pctX = bounds.Right - pad - pctW;
-        if (pctX < bounds.X + pad)
-            pctX = bounds.X + pad;
-        Rectangle pctRect = new Rectangle(pctX, bounds.Y + Math.Max(0, (bounds.Height - pctH) / 2), pctW, pctH);
-        int nameRight = pctX - gap;
+        string label = right ?? "";
+        SizeF rightSize = g.MeasureString(label, font);
+        int rightW = (int)Math.Ceiling(rightSize.Width);
+        int rightH = (int)Math.Ceiling(font.GetHeight());
+        int rightX = bounds.Right - pad - rightW;
+        if (rightX < bounds.X + pad)
+            rightX = bounds.X + pad;
+        Rectangle rightRect = new Rectangle(rightX, bounds.Y + Math.Max(0, (bounds.Height - rightH) / 2), rightW, rightH);
+        int nameRight = rightX - gap;
         int nameW = Math.Max(0, nameRight - (bounds.X + pad));
         if (nameW > 0 && !string.IsNullOrEmpty(name))
         {
@@ -865,55 +887,46 @@ internal sealed class PanelForm : Form
                 near.LineAlignment = StringAlignment.Center;
                 near.Trimming = StringTrimming.EllipsisCharacter;
                 near.FormatFlags = StringFormatFlags.NoWrap;
-                using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
+                using (SolidBrush shadow = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
                     g.DrawString(name, font, shadow,
                         new Rectangle(nameRect.X + 1, nameRect.Y + 1, nameRect.Width, nameRect.Height), near);
-                using (SolidBrush brush = new SolidBrush(TextMain))
+                using (SolidBrush brush = new SolidBrush(ink))
                     g.DrawString(name, font, brush, nameRect, near);
             }
         }
-        if (!string.IsNullOrEmpty(pct))
+        if (!string.IsNullOrEmpty(label))
         {
             using (StringFormat fmt = new StringFormat())
             {
                 fmt.Alignment = StringAlignment.Center;
                 fmt.LineAlignment = StringAlignment.Center;
                 fmt.FormatFlags = StringFormatFlags.NoWrap;
-                using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
-                    g.DrawString(pct, font, shadow,
-                        new Rectangle(pctRect.X + 1, pctRect.Y + 1, pctRect.Width, pctRect.Height), fmt);
-                using (SolidBrush brush = new SolidBrush(TextMain))
-                    g.DrawString(pct, font, brush, pctRect, fmt);
+                using (SolidBrush shadow = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
+                    g.DrawString(label, font, shadow,
+                        new Rectangle(rightRect.X + 1, rightRect.Y + 1, rightRect.Width, rightRect.Height), fmt);
+                using (SolidBrush brush = new SolidBrush(ink))
+                    g.DrawString(label, font, brush, rightRect, fmt);
             }
         }
     }
 
-    private BrightnessMonitor FirstControllableBrightness()
-    {
-        for (int i = 0; i < _brightness.Items.Count; i++)
-        {
-            if (_brightness.Items[i].Controllable)
-                return _brightness.Items[i];
-        }
-        return null;
-    }
-
     internal bool BrightnessStripContains(Point clientPt)
     {
-        if (_brightTrack.Width > 0 && _brightTrack.Contains(clientPt))
+        // Wheel/drag only on live (software-controllable) strips.
+        if (_brightTrackLive && _brightTrack.Width > 0 && _brightTrack.Contains(clientPt))
             return true;
-        return _brightTrack2.Width > 0 && _brightTrack2.Contains(clientPt);
+        return _brightTrack2Live && _brightTrack2.Width > 0 && _brightTrack2.Contains(clientPt);
     }
 
     private bool TryBrightnessHit(Point clientPt, out Rectangle track, out string id)
     {
-        if (_brightTrack2.Width > 0 && _brightTrack2.Contains(clientPt))
+        if (_brightTrack2Live && _brightTrack2.Width > 0 && _brightTrack2.Contains(clientPt))
         {
             track = _brightTrack2;
             id = _brightId2;
             return !string.IsNullOrEmpty(id);
         }
-        if (_brightTrack.Width > 0 && _brightTrack.Contains(clientPt))
+        if (_brightTrackLive && _brightTrack.Width > 0 && _brightTrack.Contains(clientPt))
         {
             track = _brightTrack;
             id = _brightId;
@@ -2165,8 +2178,8 @@ internal sealed class PanelForm : Form
         _wifiHot = _wifiHit.Contains(p);
         _chevronHot = _chevronHit.Contains(p);
         _batteryHot = _batteryHit.Contains(p);
-        _brightHover = _brightTrack.Width > 0 && _brightTrack.Contains(p);
-        _brightHover2 = _brightTrack2.Width > 0 && _brightTrack2.Contains(p);
+        _brightHover = _brightTrackLive && _brightTrack.Width > 0 && _brightTrack.Contains(p);
+        _brightHover2 = _brightTrack2Live && _brightTrack2.Width > 0 && _brightTrack2.Contains(p);
         _volHover = VolumeColumnContains(p);
 
         // MouseMove path: open drawer immediately (same rules as TickQuickPopup).
