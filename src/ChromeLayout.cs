@@ -24,7 +24,7 @@ internal static class ChromeLayout
     public const int MainMinWidthDip = 120;
     public const int BrightBlockDip = 34;
     public const int BrightGapBelowDip = 10;
-    /// <summary>Gap between the two thin brightness rows when two usable displays are present.</summary>
+    /// <summary>Gap between the two thin brightness rows when two identified displays are present.</summary>
     public const int BrightDualGapDip = 4;
 
     public struct DualBrightRows
@@ -36,7 +36,7 @@ internal static class ChromeLayout
 
     /// <summary>
     /// Split a fixed total height into two rows + gap that sum exactly to totalPx.
-    /// Used only for the dual-usable brightness branch; single strip keeps BrightBlockDip alone.
+    /// Used only for the dual-identified brightness branch; single strip keeps BrightBlockDip alone.
     /// </summary>
     public static DualBrightRows DualBrightRowHeights(int totalPx, int gapPx)
     {

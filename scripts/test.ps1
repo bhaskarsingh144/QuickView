@@ -75,5 +75,10 @@ Run-Suite "ChromeLayoutTests" @(
     "System.Management.dll"
 )
 
+Run-Suite "BrightnessChromeTests" @(
+    (Join-Path $srcDir "BrightnessChrome.cs"),
+    (Join-Path $testsDir "BrightnessChromeTests.cs")
+) "BrightnessChromeTests.exe"
+
 Write-Host "All test suites passed." -ForegroundColor Green
 exit 0

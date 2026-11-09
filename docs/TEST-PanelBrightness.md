@@ -15,15 +15,16 @@ Automated: `.\scripts\test.ps1` (SliderWheel, OpacityFade, ChromeLayout).
 | ID | Result | Notes |
 |----|--------|-------|
 | A1 Brightness under header | | Between hairline and metric chips |
-| A2 Brightness style (1 usable) | | Same as before: full `BrightBlockDip` fill, sun + level, **no** monitor name |
+| A2 Brightness style (1 controllable) | | Same as before: full `BrightBlockDip` fill, sun + level, **no** monitor name |
 | A3 Volume column | | Speaker above shortened fill; level digits inside fill; drag maps to fill only |
 | A4 Drawer control | | Full leftover hit left of network; 2×2 tile glyph; reserve ≥ header row |
 | A5 Compact Wi-Fi / battery | | Stable-width rates + fixed battery slot; drawer hit does not twitch |
-| A6 No controllable display | | Brightness omitted; volume still present (header height) |
+| A6 No identified / only one non-controllable | | Brightness omitted; volume still present (header height) |
 | A7 Chip detail open | | Chrome still visible |
 | A8 Resting body | | CPU + Memory only (GPU/Disk via chips) |
-| A9 Two plugged, one usable | | Still single-strip look (A2); no names |
-| A10 Two usable | | Two thin fills in same total height; each shows name + %; volume height unchanged |
+| A9 Two plugged, one controllable | | Dual thin rows; live row name + %; frost row brand + resolution, muted/no drag |
+| A10 Two controllable | | Two thin fills in same total height; each shows name + %; volume height unchanged |
+| A11 Two plugged, neither controllable | | Dual frosted rows with brand + resolution; no drag/wheel on either |
 
 ## B. Brightness drag / wheel
 
@@ -33,8 +34,9 @@ Automated: `.\scripts\test.ps1` (SliderWheel, OpacityFade, ChromeLayout).
 | B2 Hover + scroll | | ±1% per notch |
 | B3 While scrolling | | Panel soft-dims PanelNormal → Preview (~0.64); chrome stays readable |
 | B4 After ~650ms idle | | Panel eases back to **PanelNormal** (1.0, fully opaque) |
-| B5 Dual: drag each row | | Only that monitor changes |
-| B6 Dual: wheel per row | | Cursor over row A/B nudges that display; soft-dim still applies |
+| B5 Dual: drag each live row | | Only that monitor changes |
+| B6 Dual: wheel per live row | | Cursor over live row nudges that display; soft-dim still applies |
+| B7 Dual: frost row | | Hover shows default cursor; drag/wheel do nothing (panel scroll still works) |
 
 ## C. Volume drag / wheel
 

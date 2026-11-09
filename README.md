@@ -44,7 +44,7 @@ Live CPU and memory on the resting panel — GPU and disk behind metric chips �
 - Wide **drawer** hit zone (control fills the hover rect → Quick settings); **network** (stable-width Wi-Fi + rates) sits next to **battery**
 - Compact **battery** percent in a fixed slot (semibold metric face) with charging indicator
 - Click network → Windows network settings · Click battery → power options
-- **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling. Up to **two usable** displays get thinner named strips in the same chrome height; one usable keeps the single unnamed strip
+- **Brightness** fill block with sun icon + level — drag or scroll ±1%; panel soft-dims while scrolling. Up to **two identified** displays get thinner named strips in the same chrome height; one controllable keeps the single unnamed strip. Displays without software brightness stay visible (frosted) with brand + resolution, but are not adjustable
 - **Volume** column — speaker above a shortened fill, level digits inside; drag or scroll ±1% (no dim)
 
 ### Quick settings drawer
@@ -98,7 +98,7 @@ Output: `bin\QuickView.exe`
 .\scripts\test.ps1
 ```
 
-Runs unit tests (SliderWheel, OpacityFade, DisplayScale, ChromeLayout). Manual matrices: [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md), [docs/TEST-DisplayScale.md](docs/TEST-DisplayScale.md).
+Runs unit tests (SliderWheel, OpacityFade, DisplayScale, ChromeLayout, BrightnessChrome). Manual matrices: [docs/TEST-SliderWheel.md](docs/TEST-SliderWheel.md), [docs/TEST-PanelBrightness.md](docs/TEST-PanelBrightness.md), [docs/TEST-DisplayScale.md](docs/TEST-DisplayScale.md).
 
 ---
 
@@ -184,7 +184,7 @@ Work on a **feature branch** and open a pull request against `master` — direct
 | Issue | What to try |
 | --- | --- |
 | Won't start | Confirm .NET Framework 4.5+; check `quickview.log` next to the exe |
-| Brightness does nothing | Needs DDC/CI or WMI; many external monitors lack software brightness |
+| Brightness row frosted / no drag | That display has no DDC/CI or WMI path; brand + resolution still show. Use the monitor’s own OSD buttons |
 | No temperature | Only shown when Windows publishes a real WMI reading — often blank on laptops |
 
 ---

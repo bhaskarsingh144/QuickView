@@ -193,6 +193,39 @@ internal sealed class QuickActions
     }
 
     /// <summary>
+    /// Soft frosted track for identified displays that lack software brightness control.
+    /// No accent fill — diagonal sheen reads as locked/unavailable without looking broken.
+    /// </summary>
+    public static void DrawFillBlockDisabled(Graphics g, Rectangle block, Color trackColor, Color sheenColor)
+    {
+        if (g == null || block.Width < 1 || block.Height < 1)
+            return;
+        int radius = Math.Max(1, Math.Min(block.Width, block.Height) / 2);
+        using (GraphicsPath path = Round(block, radius))
+        {
+            using (SolidBrush brush = new SolidBrush(trackColor))
+                g.FillPath(brush, path);
+            GraphicsState state = g.Save();
+            try
+            {
+                g.SetClip(path);
+                int step = Math.Max(4, block.Height);
+                using (Pen pen = new Pen(Color.FromArgb(36, sheenColor), 1f))
+                {
+                    for (int x = block.X - block.Height; x < block.Right + block.Height; x += step)
+                        g.DrawLine(pen, x, block.Bottom, x + block.Height, block.Y);
+                }
+                using (SolidBrush gloss = new SolidBrush(Color.FromArgb(28, 255, 255, 255)))
+                    g.FillRectangle(gloss, block.X, block.Y, block.Width, Math.Max(1, block.Height / 3));
+            }
+            finally
+            {
+                g.Restore(state);
+            }
+        }
+    }
+
+    /// <summary>
     /// Vertical HyperOS-style volume block: fill rises from the bottom.
     /// </summary>
     public static void DrawFillBlockVertical(Graphics g, Rectangle block, float value01, Color trackColor, Color fillColor)
